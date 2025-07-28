@@ -11,7 +11,6 @@ summary(anova_tot_W)
 TukeyHSD(anova_tot_W)
 
 # boxplot
-library(ggplot2)
 ggplot(df, aes(x = XLQ, y = `sample A sediment(g)`)) +
   geom_boxplot(fill = "lightblue") +
   labs(title = "Total sediment weight", x = "Site", y = "Total weight (g)")
