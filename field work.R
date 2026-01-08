@@ -42,43 +42,69 @@ IO <- IO %>%
     org_pct = org_g   / subsample * 100
   )
 
-# Relationship between sediment weight & environmental parameters----
+# Relationship between sediment weight & Region/environmental parameters----
 
 library(lme4)
 library(ggplot2)
 
-model_1 <- lmer(sed_wg ~ Region + depth + temperature + (1 | Region/site), 
+sed_model1 <- lmer(sed_wg ~ Region + depth + temperature + (1 | site), 
                 data = sediment)
-summary(model_1)
+summary(sed_model1)
 
-model_2 <- lmer(sed_wg ~ Region * depth + Region * temperature + 
-                  (1 | Region/site), data = sediment)
-summary(model_2)
+sed_model2 <- lmer(sed_wg ~ Region * depth + Region * temperature + 
+                  (1 | site), data = sediment)
+summary(sed_model2)
 
-site_mean <- sediment %>% 
+sed_site_mean <- sediment %>% 
   group_by(Region, site) %>%
   summarise(
     depth = mean(depth, na.rm = T),
     temperature = mean(temperature, na.rm = T),
-    sed_wg = mean(sed_wg, na.rm = T),
+    sediment_weight = mean(sed_wg, na.rm = T),
     .groups = "drop"
   )
 
-ggplot(site_mean, aes(x = depth, y = sed_wg)) + 
+sed_depth <- ggplot(sed_site_mean, aes(x = depth, y = sediment_weight)) + 
   geom_point() +
   geom_smooth(method = "lm", se = F) +
   facet_wrap(~Region)
 
-ggplot(site_mean, aes(x = temperature, y = sed_wg)) + 
+sed_temp <- ggplot(sed_site_mean, aes(x = temperature, y = sediment_weight)) + 
   geom_point() +
   geom_smooth(method = "lm", se = F) +
   facet_wrap(~Region)
 
-ggplot(site_mean, aes(x = Region, y = sed_wg)) +
+sed_region <- ggplot(sed_site_mean, aes(x = Region, y = sediment_weight)) +
   geom_boxplot() +
-  geom_jitter(width = 0.1, size = 2)
+  geom_jitter()
 
+# Relationship between P concentration & Region/environmental parameters----
 
+bulk_P_model1 <- lmer(bulk_P_cmgg ~ Region + (1 | site), data = P)
+bulk_P_model2 <- lmer(bulk_P_cmgg ~ Region + (1 | site), data = P)
 
+summary(bulk_P_model1)
+summary(bulk_P_model2)
 
+algae_P_model1 <- lmer(algae_P_cmgg ~ Region + (1 | site), data = P)
+algae_P_model2 <- lmer(algae_P_cmgg ~ Region + (1 | site), data = P)
+
+summary(algae_P_model1)
+summary(algae_P_model2)
+
+P_site_mean <- P %>% 
+  group_by(Region, site) %>%
+  summarise(
+    bulk_P = mean(bulk_P_cmgg, na.rm = T),
+    algae_P = mean(algae_P_cmgg, na.rm = T),
+    .groups = "drop"
+  )
+
+bulk_P_region <- ggplot(P_site_mean, aes(x = Region, y = bulk_P)) +
+  geom_boxplot() +
+  geom_jitter()
+
+algae_P_region <- ggplot(P_site_mean, aes(x = Region, y = algae_P)) +
+  geom_boxplot() +
+  geom_jitter()
 
