@@ -81,16 +81,10 @@ sed_region <- ggplot(sed_site_mean, aes(x = Region, y = sediment_weight)) +
 # Relationship between P concentration & Region/environmental parameters----
 
 bulk_P_model1 <- lmer(bulk_P_cmgg ~ Region + (1 | site), data = P)
-bulk_P_model2 <- lmer(bulk_P_cmgg ~ Region + (1 | site), data = P)
-
 summary(bulk_P_model1)
-summary(bulk_P_model2)
 
 algae_P_model1 <- lmer(algae_P_cmgg ~ Region + (1 | site), data = P)
-algae_P_model2 <- lmer(algae_P_cmgg ~ Region + (1 | site), data = P)
-
 summary(algae_P_model1)
-summary(algae_P_model2)
 
 P_site_mean <- P %>% 
   group_by(Region, site) %>%
