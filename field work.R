@@ -14,6 +14,8 @@ sediment <- sediment %>%
     sed_wg = sed_dish - dish
   )
 
+# mg/g = (mg/L * mL / 1000) / (mg / 1000) = mg/L * mL / mg
+V_ml <- 5
 P <- P %>%
   rename(
     A_cmgL = `sample A_P concentration(mg/L)`,
@@ -22,8 +24,8 @@ P <- P %>%
     B_wmg = `B subsample_P weight(mg)`
   ) %>%
   mutate(
-    bulk_P_cmgg = A_cmgL * 5 / A_wmg,
-    algae_P_cmgg = B_cmgL * 5 / B_wmg
+    bulk_P_cmgg = (A_cmgL * V_ml / 1000) / A_wmg * 1000,
+    algae_P_cmgg = (B_cmgL * V_ml / 1000)/ B_wmg * 1000
   )
 
 IO <- IO %>%
@@ -78,7 +80,11 @@ sed_region <- ggplot(sed_site_mean, aes(x = Region, y = sediment_weight)) +
   geom_boxplot() +
   geom_jitter()
 
-# Relationship between P concentration & Region/environmental parameters----
+sed_depth
+sed_temp
+sed_region
+
+# Relationship between P concentration & Region----
 
 bulk_P_model1 <- lmer(bulk_P_cmgg ~ Region + (1 | site), data = P)
 summary(bulk_P_model1)
@@ -101,4 +107,104 @@ bulk_P_region <- ggplot(P_site_mean, aes(x = Region, y = bulk_P)) +
 algae_P_region <- ggplot(P_site_mean, aes(x = Region, y = algae_P)) +
   geom_boxplot() +
   geom_jitter()
+
+bulk_P_region
+algae_P_region
+
+kruskal.test(bulk_P ~ Region, data = P_site_mean)
+pairwise.wilcox.test(
+  P_site_mean$bulk_P, 
+  P_site_mean$Region,
+  p.adjust.method = "BH"
+)
+
+kruskal.test(algae_P ~ Region, data = P_site_mean)
+pairwise.wilcox.test(
+  P_site_mean$algae_P, 
+  P_site_mean$Region,
+  p.adjust.method = "BH"
+)
+
+# Fish bite----
+
+library(forcats)
+
+bite <- read_excel("Fish bite_data.xlsx")
+
+area <- 1
+duration <- 35
+bite <- bite %>%
+  mutate(bite_rate = bites / area * 60 / duration, 
+         `trophic group` = fct_relevel(
+           `trophic group`,
+           "Herbivore", "Benthic invertivore", "Corallivore", "Omnivore"
+         ))
+
+trophic_region_p1 <- ggplot(bite, aes(x = `trophic group`, y = bite_rate)) +
+  geom_violin(fill = "grey80", color = "grey40", trim = F) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  facet_wrap(~ Region, nrow = 1) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  labs(
+    x = "Trophic group",
+    y = expression(bite~rate~(m^{-2}~hr^{-1}))
+  )
+trophic_region_p1
+
+bite_herb <- bite %>%
+  filter(`trophic group` == "Herbivore")
+
+herb_region_p2 <- ggplot(bite_herb, aes(x = Region, y = bite_rate)) +
+  geom_violin(trim = F, fill = "grey80", color = "grey40") +
+  geom_jitter(width = 0.12, size = 2, alpha = 0.7) +
+  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = expression(Herbivore~bite~rate~(m^{-2}~hr^{-1}))
+  )
+herb_region_p2
+
+herb_region_p3 <- ggplot(bite_herb, aes(Region, bite_rate)) +
+  geom_boxplot(outlier.shape = NA, fill = "grey85") +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  theme_bw()
+herb_region_p3
+
+herb_region_p4 <- ggplot(bite_herb, aes(x = `herbivore functional group`, 
+                                        y = bite_rate, 
+                                        fill = `herbivore functional group`)) +
+  geom_violin(trim = F, alpha = 0.9) +
+  geom_jitter(width = 0.12, size = 2, alpha = 0.7) +
+  facet_wrap(~ Region, nrow = 1) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  )+
+  labs(
+    x = "Herbivore functional group",
+    y = expression(Herbivore~bite~rate~(m^{-2}~hr^{-1}))
+  )
+herb_region_p4
+
+bite_herb_site <- bite_herb %>%
+  group_by(Region, Site) %>%
+  summarise(
+    bite_rate = mean(bite_rate, na.rm = T),
+    .groups = "drop"
+  )
+kruskal.test(bite_rate ~ Region, data = bite_herb_site)
+pairwise.wilcox.test(
+  bite_herb_site$bite_rate,
+  bite_herb_site$Region,
+  p.adjust.method = "BH"
+)
+
+
 
