@@ -1,6 +1,10 @@
 setwd("C:/Users/dan91/OneDrive/桌面/Field work")
 library(readxl)
 library(dplyr)
+library(forcats)
+library(lme4)
+library(ggplot2)
+
 sediment <- read_excel("CNP_data.xlsx", sheet = "sediment", na = "NA")
 P <- read_excel("CNP_data.xlsx", sheet = "P", na = "NA")
 IO <- read_excel("CNP_data.xlsx", sheet = "Inorganic vs. Organic", na = "NA")
@@ -45,9 +49,6 @@ IO <- IO %>%
   )
 
 # Relationship between sediment weight & Region/environmental parameters----
-
-library(lme4)
-library(ggplot2)
 
 sed_model1 <- lmer(sed_wg ~ Region + depth + temperature + (1 | site), 
                 data = sediment)
@@ -127,8 +128,6 @@ pairwise.wilcox.test(
 
 # Fish bite----
 
-library(forcats)
-
 bite <- read_excel("Fish bite_data.xlsx")
 
 area <- 1
@@ -156,7 +155,8 @@ trophic_region_p1 <- ggplot(bite, aes(x = `trophic group`, y = bite_rate)) +
 trophic_region_p1
 
 bite_herb <- bite %>%
-  filter(`trophic group` == "Herbivore")
+  filter(`trophic group` == "Herbivore") %>%
+  rename(site = Site)
 
 herb_region_p2 <- ggplot(bite_herb, aes(x = Region, y = bite_rate)) +
   geom_violin(trim = F, fill = "grey80", color = "grey40") +
@@ -194,7 +194,7 @@ herb_region_p4 <- ggplot(bite_herb, aes(x = `herbivore functional group`,
 herb_region_p4
 
 bite_herb_site <- bite_herb %>%
-  group_by(Region, Site) %>%
+  group_by(Region, site) %>%
   summarise(
     bite_rate = mean(bite_rate, na.rm = T),
     .groups = "drop"
@@ -206,5 +206,90 @@ pairwise.wilcox.test(
   p.adjust.method = "BH"
 )
 
+# Bite rate considered of organic/inorganic presentage----
 
+IO_site <- IO %>%
+  group_by(Region, site) %>%
+  summarise(
+    org_pct = mean(org_pct, na.rm = T),
+    inorg_pct = mean(inorg_pct, na.rm = T),
+    .groups = "drop"
+  )
 
+bite_IO <- bite_herb_site %>%
+  left_join(IO_site, by = c("Region", "site"))
+
+bite_region_IO <- lm(
+  bite_rate ~ Region + org_pct,
+  data = bite_IO
+)
+summary(bite_region_IO)
+
+bite_IO$adj_bite <- resid(bite_region_IO)
+
+p5 <- ggplot(bite_IO, aes(x = Region, y = adj_bite)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.1) +
+  theme_bw() +
+  labs(
+    y = "Herbivore bite rate (residuals)"
+  )
+p5
+
+cor.test(
+  bite_IO$bite_rate,
+  bite_IO$org_pct,
+  method = "spearman"
+)
+cor.test(
+  bite_IO$bite_rate,
+  bite_IO$inorg_pct,
+  method = "spearman"
+)
+
+p6 <- ggplot(bite_IO, aes(x = org_pct, y = bite_rate)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = F) +
+  facet_wrap(~Region)+
+  theme_bw()+
+  labs(
+    x = "Organic matter (%)",
+    y = expression(Herbivore~bite~rate~(m^{-2}~hr^{-1}))
+  )
+p6
+
+p7 <- ggplot(bite_IO, aes(x = inorg_pct, y = bite_rate)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = F) +
+  facet_wrap(~Region)+
+  theme_bw()+
+  labs(
+    x = "Inorganic matter (%)",
+    y = expression(Herbivore~bite~rate~(m^{-2}~hr^{-1}))
+  )
+p7
+
+# Bite rate by individual----
+
+bite_by_quadrat <- bite %>%
+  filter(`trophic group` == "Herbivore") %>%
+  group_by(Region, Site, Camera) %>%
+  summarise(
+    total_bites = sum(bites, na.rm = TRUE),
+    n_events = n(),
+    mean_bites_per_event = mean(bites, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    bite_rate = total_bites * 60 / duration
+  )
+
+herb_event_p8 <- ggplot(bite_by_quadrat, aes(Region, bite_rate)) +
+  geom_boxplot(outlier.shape = NA, fill = "grey85") +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  theme_bw() +
+  labs(
+    y = expression("Herbivore bite rate per event per camera (hr"^{-1}*")")
+  )
+herb_event_p8
