@@ -179,8 +179,9 @@ herb_region_p3
 herb_region_p4 <- ggplot(bite_herb, aes(x = `herbivore functional group`, 
                                         y = bite_rate, 
                                         fill = `herbivore functional group`)) +
-  geom_violin(trim = F, alpha = 0.9) +
+  geom_boxplot(outlier.shape = NA) +
   geom_jitter(width = 0.12, size = 2, alpha = 0.7) +
+  stat_summary(fun = mean, geom = "point", color = "red") +
   facet_wrap(~ Region, nrow = 1) +
   theme_bw() +
   theme(
