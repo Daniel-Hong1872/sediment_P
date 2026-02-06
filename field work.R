@@ -4,6 +4,7 @@ library(dplyr)
 library(forcats)
 library(lme4)
 library(ggplot2)
+library(patchwork)
 
 sediment <- read_excel("CNP_data.xlsx", sheet = "sediment", na = "NA")
 P <- read_excel("CNP_data.xlsx", sheet = "P", na = "NA")
@@ -282,15 +283,59 @@ bite_by_quadrat <- bite %>%
     .groups = "drop"
   ) %>%
   mutate(
-    bite_rate = total_bites * 60 / duration
+    total_bite_rate = total_bites * 60 / duration,
+    event_rate = n_events * 60 / duration
   )
 
-herb_event_p8 <- ggplot(bite_by_quadrat, aes(Region, bite_rate)) +
-  geom_boxplot(outlier.shape = NA, fill = "grey85") +
+region_color <- c(
+  "GI" = "lightgreen",
+  "NE" = "skyblue1",
+  "XLQ" = "indianred1"
+)
+
+bite_per_event_p8 <- ggplot(bite_by_quadrat, aes(Region, mean_bites_per_event)) +
+  geom_boxplot(outlier.shape = NA, fill = region_color) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
   theme_bw() +
   labs(
-    y = expression("Herbivore bite rate per event per camera (hr"^{-1}*")")
+    y = expression(Bites~per~event~(bites~events^{-1}))
   )
-herb_event_p8
+bite_per_event_p8
+
+
+total_bite_rate_p9 <- ggplot(bite_by_quadrat, aes(Region, total_bite_rate)) +
+  geom_boxplot(outlier.shape = NA, fill = region_color) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  theme_bw() +
+  labs(
+    y = expression(Total~bite~rate~(bites~m^{-2}~hr^{-1}))
+  )
+total_bite_rate_p9
+
+
+event_rate_p10 <- ggplot(bite_by_quadrat, aes(Region, event_rate)) +
+  geom_boxplot(outlier.shape = NA, fill = region_color) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  theme_bw() +
+  labs(
+    y = expression(Feeding~events~rate~(events~m^{-2}~hr^{-1}))
+  )
+event_rate_p10
+
+(total_bite_rate_p9|event_rate_p10|bite_per_event_p8) +
+  plot_annotation(
+    title = "Herbivore Grazing Pressure"
+  )
+
+kruskal.test(total_bite_rate ~ Region, data = bite_by_quadrat)
+kruskal.test(event_rate ~ Region, data = bite_by_quadrat)
+kruskal.test(mean_bites_per_event ~ Region, data = bite_by_quadrat)
+
+pairwise.wilcox.test(
+  bite_by_quadrat$event_rate,
+  bite_by_quadrat$Region,
+  p.adjust.method = "BH"
+)
