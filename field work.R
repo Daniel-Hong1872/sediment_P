@@ -129,6 +129,12 @@ pairwise.wilcox.test(
 
 # Fish bite----
 
+
+
+
+
+
+
 bite <- read_excel("Fish bite_data.xlsx")
 
 area <- 1
@@ -140,60 +146,97 @@ bite <- bite %>%
            "Herbivore", "Benthic invertivore", "Corallivore", "Omnivore"
          ))
 
-trophic_region_p1 <- ggplot(bite, aes(x = `trophic group`, y = bite_rate)) +
-  geom_violin(fill = "grey80", color = "grey40", trim = F) +
+bite_quad_trophic <- bite %>%
+  group_by(Region, Site, Camera, `trophic group`) %>%
+  summarise(
+    total_bites = sum(bites, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    bite_rate = total_bites * 60 / duration   # m-2 hr-1
+  )
+
+trophic_color <- c(
+  "Herbivore" = "#7FDEA0",
+  "Benthic invertivore" = "#47A0BD",
+  "Corallivore" = "#FF6D69",
+  "Omnivore" = "#AF84F3",
+  "NA" = "#D0D2D4"
+)
+
+trophic_region_p1 <- ggplot(
+  bite_quad_trophic, 
+  aes(x = `trophic group`, y = bite_rate, fill = `trophic group`)) +
+  geom_boxplot(outlier.shape = NA) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  stat_summary(fun = mean, geom = "point", color = "red", size = 2.5) +
   facet_wrap(~ Region, nrow = 1) +
+  scale_fill_manual(values = trophic_color, drop = FALSE) +
   theme_bw() +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
   ) +
   labs(
     x = "Trophic group",
-    y = expression(bite~rate~(m^{-2}~hr^{-1}))
+    y = expression(Bite~rate~(bites~m^{-2}~hr^{-1}))
   )
 trophic_region_p1
+
+bite_quad_func <- bite %>%
+  filter(`trophic group` == "Herbivore") %>%
+  group_by(Region, Site, Camera, `herbivore functional group`) %>%
+  summarise(
+    total_bites = sum(bites, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    bite_rate = total_bites * 60 / duration
+  )
 
 bite_herb <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
   rename(site = Site)
 
-herb_region_p2 <- ggplot(bite_herb, aes(x = Region, y = bite_rate)) +
-  geom_violin(trim = F, fill = "grey80", color = "grey40") +
-  geom_jitter(width = 0.12, size = 2, alpha = 0.7) +
-  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
-  theme_bw() +
-  labs(
-    x = "Region",
-    y = expression(Herbivore~bite~rate~(m^{-2}~hr^{-1}))
-  )
-herb_region_p2
+region_color <- c(
+  "GI" = "lightgreen",
+  "NE" = "skyblue1",
+  "XLQ" = "indianred1"
+)
 
-herb_region_p3 <- ggplot(bite_herb, aes(Region, bite_rate)) +
-  geom_boxplot(outlier.shape = NA, fill = "grey85") +
+bite_rate_indiv_p3 <- ggplot(bite_herb, aes(Region, bite_rate)) +
+  geom_boxplot(outlier.shape = NA, fill = region_color) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
   theme_bw()
-herb_region_p3
+bite_rate_indiv_p3
 
-herb_region_p4 <- ggplot(bite_herb, aes(x = `herbivore functional group`, 
-                                        y = bite_rate, 
-                                        fill = `herbivore functional group`)) +
+func_group_color <- c(
+  "browsers" = "#8A6646",
+  "farmers (territorial cropper)" = "#E499C4",
+  "grazers (croppers)" = "#7CCE7C",
+  "scrapers" = "#6CA6CC",
+  "small excavators" = "#D89D65"
+)
+
+herb_func_region_p4 <- ggplot(
+  bite_quad_func,
+  aes(x = `herbivore functional group`, y = bite_rate,
+      fill = `herbivore functional group`)) +
   geom_boxplot(outlier.shape = NA) +
-  geom_jitter(width = 0.12, size = 2, alpha = 0.7) +
+  geom_jitter(width = 0.15, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
   facet_wrap(~ Region, nrow = 1) +
+  scale_fill_manual(values = func_group_color, drop = FALSE) +
   theme_bw() +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "bottom"
-  )+
+    legend.position = "none") +
   labs(
     x = "Herbivore functional group",
-    y = expression(Herbivore~bite~rate~(m^{-2}~hr^{-1}))
+    y = expression(Bite~rate~(bites~m^{-2}~hr^{-1}))
   )
-herb_region_p4
+herb_func_region_p4
 
 bite_herb_site <- bite_herb %>%
   group_by(Region, site) %>%
@@ -208,7 +251,7 @@ pairwise.wilcox.test(
   p.adjust.method = "BH"
 )
 
-# Bite rate considered of organic/inorganic presentage----
+# Bite rate considered of organic/inorganic percentage----
 
 IO_site <- IO %>%
   group_by(Region, site) %>%
@@ -286,12 +329,6 @@ bite_by_quadrat <- bite %>%
     total_bite_rate = total_bites * 60 / duration,
     event_rate = n_events * 60 / duration
   )
-
-region_color <- c(
-  "GI" = "lightgreen",
-  "NE" = "skyblue1",
-  "XLQ" = "indianred1"
-)
 
 bite_per_event_p8 <- ggplot(bite_by_quadrat, aes(Region, mean_bites_per_event)) +
   geom_boxplot(outlier.shape = NA, fill = region_color) +
