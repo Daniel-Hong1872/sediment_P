@@ -5,6 +5,7 @@ library(forcats)
 library(lme4)
 library(ggplot2)
 library(patchwork)
+library(tidyr)
 
 sediment <- read_excel("CNP_data.xlsx", sheet = "sediment", na = "NA")
 P <- read_excel("CNP_data.xlsx", sheet = "P", na = "NA")
@@ -59,6 +60,12 @@ sed_model2 <- lmer(sed_wg ~ Region * depth + Region * temperature +
                   (1 | site), data = sediment)
 summary(sed_model2)
 
+region_color <- c(
+  "GI" = "lightgreen",
+  "NE" = "skyblue1",
+  "XLQ" = "indianred1"
+)
+
 sed_site_mean <- sediment %>% 
   group_by(Region, site) %>%
   summarise(
@@ -71,16 +78,19 @@ sed_site_mean <- sediment %>%
 sed_depth <- ggplot(sed_site_mean, aes(x = depth, y = sediment_weight)) + 
   geom_point() +
   geom_smooth(method = "lm", se = F) +
-  facet_wrap(~Region)
+  facet_wrap(~Region) +
+  theme_bw()
 
 sed_temp <- ggplot(sed_site_mean, aes(x = temperature, y = sediment_weight)) + 
   geom_point() +
   geom_smooth(method = "lm", se = F) +
-  facet_wrap(~Region)
+  facet_wrap(~Region) +
+  theme_bw()
 
 sed_region <- ggplot(sed_site_mean, aes(x = Region, y = sediment_weight)) +
-  geom_boxplot() +
-  geom_jitter()
+  geom_boxplot(fill = region_color) +
+  geom_jitter() +
+  theme_bw()
 
 sed_depth
 sed_temp
@@ -103,12 +113,14 @@ P_site_mean <- P %>%
   )
 
 bulk_P_region <- ggplot(P_site_mean, aes(x = Region, y = bulk_P)) +
-  geom_boxplot() +
-  geom_jitter()
+  geom_boxplot(fill = region_color) +
+  geom_jitter() +
+  theme_bw()
 
 algae_P_region <- ggplot(P_site_mean, aes(x = Region, y = algae_P)) +
-  geom_boxplot() +
-  geom_jitter()
+  geom_boxplot(fill = region_color) +
+  geom_jitter() +
+  theme_bw()
 
 bulk_P_region
 algae_P_region
@@ -129,12 +141,6 @@ pairwise.wilcox.test(
 
 # Fish bite----
 
-
-
-
-
-
-
 bite <- read_excel("Fish bite_data.xlsx")
 
 area <- 1
@@ -147,7 +153,7 @@ bite <- bite %>%
          ))
 
 bite_quad_trophic <- bite %>%
-  group_by(Region, Site, Camera, `trophic group`) %>%
+  group_by(Region, site, Camera, `trophic group`) %>%
   summarise(
     total_bites = sum(bites, na.rm = TRUE),
     .groups = "drop"
@@ -158,9 +164,9 @@ bite_quad_trophic <- bite %>%
 
 trophic_color <- c(
   "Herbivore" = "#7FDEA0",
-  "Benthic invertivore" = "#47A0BD",
-  "Corallivore" = "#FF6D69",
-  "Omnivore" = "#AF84F3",
+  "Benthic invertivore" = "#9DCCF0",
+  "Corallivore" = "#FFA0F0",
+  "Omnivore" = "#FF6D69",
   "NA" = "#D0D2D4"
 )
 
@@ -185,7 +191,7 @@ trophic_region_p1
 
 bite_quad_func <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
-  group_by(Region, Site, Camera, `herbivore functional group`) %>%
+  group_by(Region, site, Camera, `herbivore functional group`) %>%
   summarise(
     total_bites = sum(bites, na.rm = TRUE),
     .groups = "drop"
@@ -195,21 +201,7 @@ bite_quad_func <- bite %>%
   )
 
 bite_herb <- bite %>%
-  filter(`trophic group` == "Herbivore") %>%
-  rename(site = Site)
-
-region_color <- c(
-  "GI" = "lightgreen",
-  "NE" = "skyblue1",
-  "XLQ" = "indianred1"
-)
-
-bite_rate_indiv_p3 <- ggplot(bite_herb, aes(Region, bite_rate)) +
-  geom_boxplot(outlier.shape = NA, fill = region_color) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
-  theme_bw()
-bite_rate_indiv_p3
+  filter(`trophic group` == "Herbivore")
 
 func_group_color <- c(
   "browsers" = "#8A6646",
@@ -251,74 +243,11 @@ pairwise.wilcox.test(
   p.adjust.method = "BH"
 )
 
-# Bite rate considered of organic/inorganic percentage----
-
-IO_site <- IO %>%
-  group_by(Region, site) %>%
-  summarise(
-    org_pct = mean(org_pct, na.rm = T),
-    inorg_pct = mean(inorg_pct, na.rm = T),
-    .groups = "drop"
-  )
-
-bite_IO <- bite_herb_site %>%
-  left_join(IO_site, by = c("Region", "site"))
-
-bite_region_IO <- lm(
-  bite_rate ~ Region + org_pct,
-  data = bite_IO
-)
-summary(bite_region_IO)
-
-bite_IO$adj_bite <- resid(bite_region_IO)
-
-p5 <- ggplot(bite_IO, aes(x = Region, y = adj_bite)) +
-  geom_boxplot() +
-  geom_jitter(width = 0.1) +
-  theme_bw() +
-  labs(
-    y = "Herbivore bite rate (residuals)"
-  )
-p5
-
-cor.test(
-  bite_IO$bite_rate,
-  bite_IO$org_pct,
-  method = "spearman"
-)
-cor.test(
-  bite_IO$bite_rate,
-  bite_IO$inorg_pct,
-  method = "spearman"
-)
-
-p6 <- ggplot(bite_IO, aes(x = org_pct, y = bite_rate)) +
-  geom_point(size = 2) +
-  geom_smooth(method = "lm", se = F) +
-  facet_wrap(~Region)+
-  theme_bw()+
-  labs(
-    x = "Organic matter (%)",
-    y = expression(Herbivore~bite~rate~(m^{-2}~hr^{-1}))
-  )
-p6
-
-p7 <- ggplot(bite_IO, aes(x = inorg_pct, y = bite_rate)) +
-  geom_point(size = 2) +
-  geom_smooth(method = "lm", se = F) +
-  facet_wrap(~Region)+
-  theme_bw()+
-  labs(
-    x = "Inorganic matter (%)",
-    y = expression(Herbivore~bite~rate~(m^{-2}~hr^{-1}))
-  )
-p7
-
 # Bite rate by individual----
 
 bite_by_quadrat <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
-  group_by(Region, Site, Camera) %>%
+  group_by(Region, site, Camera) %>%
   summarise(
     total_bites = sum(bites, na.rm = TRUE),
     n_events = n(),
@@ -376,3 +305,148 @@ pairwise.wilcox.test(
   bite_by_quadrat$Region,
   p.adjust.method = "BH"
 )
+
+# Bite rate considered of organic/inorganic percentage----
+
+IO_site <- IO %>%
+  group_by(Region, site) %>%
+  summarise(
+    org_pct = mean(org_pct, na.rm = T),
+    inorg_pct = mean(inorg_pct, na.rm = T),
+    salt_pct = mean(salt_pct, na.rm = T),
+    .groups = "drop"
+  )
+
+bite_IO <- bite_herb_site %>%
+  left_join(IO_site, by = c("Region", "site"))
+
+bite_region_IO <- lm(
+  bite_rate ~ Region + org_pct,
+  data = bite_IO
+)
+summary(bite_region_IO)
+
+
+bite_by_quadrat <- bite_by_quadrat %>%
+  left_join(IO_site, by = c("Region", "site"))
+
+IO_event <- lm(event_rate ~ org_pct + inorg_pct, data = bite_by_quadrat)
+summary(IO_event)
+
+bite_by_quadrat$event_resid <- resid(IO_event)
+
+event_IO_resid <- ggplot(bite_by_quadrat, aes(Region, event_resid)) +
+  geom_boxplot(outlier.shape = NA, fill = region_color) +
+  geom_jitter(width = 0.1) +
+  theme_bw() +
+  labs(
+    y = "Feeding event rates (residuals, adjusted for IO)"
+  )
+event_IO_resid
+
+IO_bite_per_event <- lm(mean_bites_per_event ~ org_pct + inorg_pct, 
+                        data = bite_by_quadrat)
+summary(IO_bite_per_event)
+
+bite_by_quadrat$bite_per_event_resid <- resid(IO_bite_per_event)
+
+bite_per_event_IO_resid <- ggplot(bite_by_quadrat, 
+                                  aes(Region, bite_per_event_resid)) +
+  geom_boxplot(outlier.shape = NA, fill = region_color) +
+  geom_jitter(width = 0.1) +
+  theme_bw()+
+  labs(
+    y = "Bites per event (residuals, adjusted for sediment)"
+  )
+bite_per_event_IO_resid
+
+kruskal.test(event_resid ~ Region, data = bite_by_quadrat)
+kruskal.test(bite_per_event_resid ~ Region, data = bite_by_quadrat)
+
+cor.test(bite_by_quadrat$total_bite_rate,
+         bite_by_quadrat$event_rate,
+         method = "spearman")
+cor.test(bite_by_quadrat$total_bite_rate,
+         bite_by_quadrat$mean_bites_per_event,
+         method = "spearman")
+
+cor.test(bite_by_quadrat$event_rate,
+         bite_by_quadrat$org_pct,
+         method = "spearman")
+cor.test(bite_by_quadrat$event_rate,
+         bite_by_quadrat$inorg_pct,
+         method = "spearman")
+
+cor.test(bite_by_quadrat$mean_bites_per_event,
+         bite_by_quadrat$org_pct,
+         method = "spearman")
+cor.test(bite_by_quadrat$mean_bites_per_event,
+         bite_by_quadrat$inorg_pct,
+         method = "spearman")
+
+ggplot(bite_by_quadrat, aes(org_pct, event_rate)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(~Region) +
+  theme_bw() +
+  labs(
+    x = "Organic matter (%)",
+    y = "Feeding event rate"
+  )
+
+ggplot(bite_by_quadrat, aes(org_pct, mean_bites_per_event)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(~Region) +
+  theme_bw() +
+  labs(
+    x = "Organic matter (%)",
+    y = "Bite per event"
+  )
+
+IO_site_long <- IO_site %>%
+  mutate(org_pct = org_pct / 100,
+         inorg_pct = inorg_pct / 100,
+         salt_pct = salt_pct / 100) %>%
+  select(Region, site, org_pct, inorg_pct, salt_pct) %>%
+  pivot_longer(
+    cols = c(org_pct, inorg_pct, salt_pct), 
+    names_to = "component",
+    values_to = "percentage"
+  )
+
+sediment_color <- c(
+  "org_pct" = "#6AA84F",
+  "inorg_pct" = "#6FA8DC",
+  "salt_pct" = "#999999"
+)
+
+IO_pct <- ggplot(
+  IO_site_long, aes(x = site, y = percentage, fill = component)
+  ) + 
+  geom_bar(
+    stat = "identity",
+    position = "fill",
+    color = "black",
+    width = 0.8
+  ) +
+  facet_wrap(~ Region, scales = "free_x") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_manual(
+    values = sediment_color,
+    labels = c(
+      "org_pct" = "Organic matter",
+      "inorg_pct" = "Inorganic matter",
+      "salt_pct" = "Salt"
+    )
+  ) +
+  theme_bw()+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    x = "Site",
+    y = "Percentage (%)",
+    fill = "Sediment component"
+  )
+IO_pct  
+  
