@@ -81,19 +81,21 @@ sed_depth <- ggplot(sed_site_mean, aes(x = depth, y = sediment_weight)) +
   facet_wrap(~Region) +
   theme_bw()
 
+sed_depth
+
 sed_temp <- ggplot(sed_site_mean, aes(x = temperature, y = sediment_weight)) + 
   geom_point() +
   geom_smooth(method = "lm", se = F) +
   facet_wrap(~Region) +
   theme_bw()
 
+sed_temp
+
 sed_region <- ggplot(sed_site_mean, aes(x = Region, y = sediment_weight)) +
   geom_boxplot(fill = region_color) +
   geom_jitter() +
   theme_bw()
 
-sed_depth
-sed_temp
 sed_region
 
 # Relationship between P concentration & Region----
@@ -117,12 +119,13 @@ bulk_P_region <- ggplot(P_site_mean, aes(x = Region, y = bulk_P)) +
   geom_jitter() +
   theme_bw()
 
+bulk_P_region
+
 algae_P_region <- ggplot(P_site_mean, aes(x = Region, y = algae_P)) +
   geom_boxplot(fill = region_color) +
   geom_jitter() +
   theme_bw()
 
-bulk_P_region
 algae_P_region
 
 kruskal.test(bulk_P ~ Region, data = P_site_mean)
@@ -166,7 +169,7 @@ trophic_color <- c(
   "Herbivore" = "#7FDEA0",
   "Benthic invertivore" = "#9DCCF0",
   "Corallivore" = "#FFA0F0",
-  "Omnivore" = "#FF6D69",
+  "Omnivore" = "#9EA2F0",
   "NA" = "#D0D2D4"
 )
 
@@ -200,9 +203,6 @@ bite_quad_func <- bite %>%
     bite_rate = total_bites * 60 / duration
   )
 
-bite_herb <- bite %>%
-  filter(`trophic group` == "Herbivore")
-
 func_group_color <- c(
   "browsers" = "#8A6646",
   "farmers (territorial cropper)" = "#E499C4",
@@ -230,18 +230,16 @@ herb_func_region_p4 <- ggplot(
   )
 herb_func_region_p4
 
-bite_herb_site <- bite_herb %>%
+
+bite_herb_site <- bite %>%
+  filter(`trophic group` == "Herbivore") %>%
   group_by(Region, site) %>%
   summarise(
     bite_rate = mean(bite_rate, na.rm = T),
     .groups = "drop"
   )
+
 kruskal.test(bite_rate ~ Region, data = bite_herb_site)
-pairwise.wilcox.test(
-  bite_herb_site$bite_rate,
-  bite_herb_site$Region,
-  p.adjust.method = "BH"
-)
 
 # Bite rate by individual----
 
@@ -259,7 +257,7 @@ bite_by_quadrat <- bite %>%
     event_rate = n_events * 60 / duration
   )
 
-bite_per_event_p8 <- ggplot(bite_by_quadrat, aes(Region, mean_bites_per_event)) +
+bite_per_event <- ggplot(bite_by_quadrat, aes(Region, mean_bites_per_event)) +
   geom_boxplot(outlier.shape = NA, fill = region_color) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
@@ -267,10 +265,10 @@ bite_per_event_p8 <- ggplot(bite_by_quadrat, aes(Region, mean_bites_per_event)) 
   labs(
     y = expression(Bites~per~event~(bites~events^{-1}))
   )
-bite_per_event_p8
+bite_per_event
 
 
-total_bite_rate_p9 <- ggplot(bite_by_quadrat, aes(Region, total_bite_rate)) +
+total_bite_rate <- ggplot(bite_by_quadrat, aes(Region, total_bite_rate)) +
   geom_boxplot(outlier.shape = NA, fill = region_color) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
@@ -278,10 +276,10 @@ total_bite_rate_p9 <- ggplot(bite_by_quadrat, aes(Region, total_bite_rate)) +
   labs(
     y = expression(Total~bite~rate~(bites~m^{-2}~hr^{-1}))
   )
-total_bite_rate_p9
+total_bite_rate
 
 
-event_rate_p10 <- ggplot(bite_by_quadrat, aes(Region, event_rate)) +
+event_rate <- ggplot(bite_by_quadrat, aes(Region, event_rate)) +
   geom_boxplot(outlier.shape = NA, fill = region_color) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
@@ -289,9 +287,9 @@ event_rate_p10 <- ggplot(bite_by_quadrat, aes(Region, event_rate)) +
   labs(
     y = expression(Feeding~events~rate~(events~m^{-2}~hr^{-1}))
   )
-event_rate_p10
+event_rate
 
-(total_bite_rate_p9|event_rate_p10|bite_per_event_p8) +
+(total_bite_rate|event_rate|bite_per_event) +
   plot_annotation(
     title = "Herbivore Grazing Pressure"
   )
@@ -320,12 +318,8 @@ IO_site <- IO %>%
 bite_IO <- bite_herb_site %>%
   left_join(IO_site, by = c("Region", "site"))
 
-bite_region_IO <- lm(
-  bite_rate ~ Region + org_pct,
-  data = bite_IO
-)
+bite_region_IO <- lm(bite_rate ~ Region + org_pct, data = bite_IO)
 summary(bite_region_IO)
-
 
 bite_by_quadrat <- bite_by_quadrat %>%
   left_join(IO_site, by = c("Region", "site"))
@@ -384,7 +378,7 @@ cor.test(bite_by_quadrat$mean_bites_per_event,
          bite_by_quadrat$inorg_pct,
          method = "spearman")
 
-ggplot(bite_by_quadrat, aes(org_pct, event_rate)) +
+event_rate_org <- ggplot(bite_by_quadrat, aes(org_pct, event_rate)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) +
   facet_wrap(~Region) +
@@ -393,8 +387,9 @@ ggplot(bite_by_quadrat, aes(org_pct, event_rate)) +
     x = "Organic matter (%)",
     y = "Feeding event rate"
   )
+event_rate_org
 
-ggplot(bite_by_quadrat, aes(org_pct, mean_bites_per_event)) +
+bite_per_event_org <- ggplot(bite_by_quadrat, aes(org_pct, mean_bites_per_event)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) +
   facet_wrap(~Region) +
@@ -403,6 +398,7 @@ ggplot(bite_by_quadrat, aes(org_pct, mean_bites_per_event)) +
     x = "Organic matter (%)",
     y = "Bite per event"
   )
+bite_per_event_org
 
 IO_site_long <- IO_site %>%
   mutate(org_pct = org_pct / 100,
