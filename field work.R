@@ -460,13 +460,9 @@ urchin_all <- bind_rows(XLQ_ur, GI_ur, NE_ur)
 herb_urchin <- urchin_all %>%
   filter(Genus %in% c("Diadema", "Echinothrix", "Stomopneustes"))
 
-herb_urchin_transect <- herb_urchin %>%
-  group_by(Region, Site, Transect, Genus) %>%
-  summarise(n_urchin = n(), .groups = "drop")
-
-herb_urchin_region <- herb_urchin_transect %>%
+herb_urchin_region <- herb_urchin %>%
   group_by(Region, Genus) %>%
-  summarise(Total = sum(n_urchin), .groups = "drop")
+  summarise(Total = n(), .groups = "drop")
 
 urchin_color <- c(
   "Diadema" = "#6BAED6",
