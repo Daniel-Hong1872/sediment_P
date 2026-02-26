@@ -162,8 +162,8 @@ bite_quad_trophic <- bite %>%
     .groups = "drop"
   ) %>%
   mutate(
-    bite_rate = total_bites * 60 / duration   # m-2 hr-1
-  )
+    bite_rate = total_bites * 60 / duration) %>%
+  filter(!is.na(`trophic group`))
 
 trophic_color <- c(
   "Herbivore" = "#7FDEA0",
@@ -173,7 +173,7 @@ trophic_color <- c(
   "NA" = "#D0D2D4"
 )
 
-trophic_region_p1 <- ggplot(
+trophic_region <- ggplot(
   bite_quad_trophic, 
   aes(x = `trophic group`, y = bite_rate, fill = `trophic group`)) +
   geom_boxplot(outlier.shape = NA) +
@@ -190,7 +190,7 @@ trophic_region_p1 <- ggplot(
     x = "Trophic group",
     y = expression(Bite~rate~(bites~m^{-2}~hr^{-1}))
   )
-trophic_region_p1
+trophic_region
 
 bite_quad_func <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
@@ -205,13 +205,13 @@ bite_quad_func <- bite %>%
 
 func_group_color <- c(
   "browsers" = "#8A6646",
-  "farmers (territorial cropper)" = "#E499C4",
+  "farmers (territorial croppers)" = "#E499C4",
   "grazers (croppers)" = "#7CCE7C",
   "scrapers" = "#6CA6CC",
   "small excavators" = "#D89D65"
 )
 
-herb_func_region_p4 <- ggplot(
+herb_func_region <- ggplot(
   bite_quad_func,
   aes(x = `herbivore functional group`, y = bite_rate,
       fill = `herbivore functional group`)) +
@@ -228,7 +228,7 @@ herb_func_region_p4 <- ggplot(
     x = "Herbivore functional group",
     y = expression(Bite~rate~(bites~m^{-2}~hr^{-1}))
   )
-herb_func_region_p4
+herb_func_region
 
 
 bite_herb_site <- bite %>%
@@ -412,7 +412,7 @@ IO_site_long <- IO_site %>%
   )
 
 sediment_color <- c(
-  "org_pct" = "#6AA84F",
+  "org_pct" = "#FFBB39",
   "inorg_pct" = "#6FA8DC",
   "salt_pct" = "#999999"
 )
@@ -445,4 +445,39 @@ IO_pct <- ggplot(
     fill = "Sediment component"
   )
 IO_pct  
-  
+
+#sea urchin----
+
+XLQ_ur <- read_excel("urchin density.xlsx", sheet = "XLQ") %>% 
+  mutate(Region = "XLQ")
+GI_ur <- read_excel("urchin density.xlsx", sheet = "GI") %>%
+  mutate(Region = "GI")
+NE_ur <- read_excel("urchin density.xlsx", sheet = "NE") %>%
+  mutate(Region = "NE")
+
+urchin_all <- bind_rows(XLQ_ur, GI_ur, NE_ur)
+
+herb_urchin <- urchin_all %>%
+  filter(Genus %in% c("Diadema", "Echinothrix", "Stomopneustes"))
+
+herb_urchin_transect <- herb_urchin %>%
+  group_by(Region, Site, Transect, Genus) %>%
+  summarise(n_urchin = n(), .groups = "drop")
+
+herb_urchin_region <- herb_urchin_transect %>%
+  group_by(Region, Genus) %>%
+  summarise(Total = sum(n_urchin), .groups = "drop")
+
+urchin_color <- c(
+  "Diadema" = "#6BAED6",
+  "Echinothrix" = "#8FCB9B",
+  "Stomopneustes" = "#6C6F9A"
+)
+
+herb_urchin_sum_region <- 
+  ggplot(herb_urchin_region, aes(x = Region, y = Total, fill = Genus)) +
+  geom_col() +
+  scale_fill_manual(values = urchin_color, drop = F) +
+  theme_bw() +
+  labs(x = "Region", y = "Total number of urchins", fill = "Genus")
+herb_urchin_sum_region
