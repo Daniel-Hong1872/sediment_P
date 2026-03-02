@@ -61,9 +61,9 @@ sed_model2 <- lmer(sed_wg ~ Region * depth + Region * temperature +
 summary(sed_model2)
 
 region_color <- c(
-  "GI" = "lightgreen",
-  "NE" = "skyblue1",
-  "XLQ" = "indianred1"
+  "GI" = "#4CAF50",
+  "NE" = "#3288BD",
+  "XLQ" = "#D53E4F"
 )
 
 sed_site_mean <- sediment %>% 
@@ -166,11 +166,10 @@ bite_quad_trophic <- bite %>%
   filter(!is.na(`trophic group`))
 
 trophic_color <- c(
-  "Herbivore" = "#7FDEA0",
-  "Benthic invertivore" = "#9DCCF0",
-  "Corallivore" = "#FFA0F0",
-  "Omnivore" = "#9EA2F0",
-  "NA" = "#D0D2D4"
+  "Herbivore" = "#4DB6AC",
+  "Benthic invertivore" = "#FDB863",
+  "Corallivore" = "#80B1D3",
+  "Omnivore" = "#BEAED4"
 )
 
 trophic_region <- ggplot(
@@ -178,7 +177,7 @@ trophic_region <- ggplot(
   aes(x = `trophic group`, y = bite_rate, fill = `trophic group`)) +
   geom_boxplot(outlier.shape = NA) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red", size = 2.5) +
+  stat_summary(fun = mean, geom = "point", color = "red") +
   facet_wrap(~ Region, nrow = 1) +
   scale_fill_manual(values = trophic_color, drop = FALSE) +
   theme_bw() +
@@ -204,11 +203,11 @@ bite_quad_func <- bite %>%
   )
 
 func_group_color <- c(
-  "browsers" = "#8A6646",
-  "farmers (territorial croppers)" = "#E499C4",
-  "grazers (croppers)" = "#7CCE7C",
-  "scrapers" = "#6CA6CC",
-  "small excavators" = "#D89D65"
+  "browsers" = "#BC9C6D",
+  "farmers (territorial croppers)" = "#D8B365",
+  "grazers (croppers)" = "#7FBF7B",
+  "scrapers" = "#80B1D3",
+  "small excavators" = "#BEAED4"
 )
 
 herb_func_region <- ggplot(
@@ -260,7 +259,7 @@ bite_by_quadrat <- bite %>%
 bite_per_event <- ggplot(bite_by_quadrat, aes(Region, mean_bites_per_event)) +
   geom_boxplot(outlier.shape = NA, fill = region_color) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  stat_summary(fun = mean, geom = "point", color = "red") +
   theme_bw() +
   labs(
     y = expression(Bites~per~event~(bites~events^{-1}))
@@ -271,7 +270,7 @@ bite_per_event
 total_bite_rate <- ggplot(bite_by_quadrat, aes(Region, total_bite_rate)) +
   geom_boxplot(outlier.shape = NA, fill = region_color) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  stat_summary(fun = mean, geom = "point", color = "red") +
   theme_bw() +
   labs(
     y = expression(Total~bite~rate~(bites~m^{-2}~hr^{-1}))
@@ -282,7 +281,7 @@ total_bite_rate
 event_rate <- ggplot(bite_by_quadrat, aes(Region, event_rate)) +
   geom_boxplot(outlier.shape = NA, fill = region_color) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  stat_summary(fun = mean, geom = "point", color = "red") +
   theme_bw() +
   labs(
     y = expression(Feeding~events~rate~(events~m^{-2}~hr^{-1}))
@@ -344,8 +343,8 @@ summary(IO_bite_per_event)
 
 bite_by_quadrat$bite_per_event_resid <- resid(IO_bite_per_event)
 
-bite_per_event_IO_resid <- ggplot(bite_by_quadrat, 
-                                  aes(Region, bite_per_event_resid)) +
+bite_per_event_IO_resid <- 
+  ggplot(bite_by_quadrat, aes(Region, bite_per_event_resid)) +
   geom_boxplot(outlier.shape = NA, fill = region_color) +
   geom_jitter(width = 0.1) +
   theme_bw()+
