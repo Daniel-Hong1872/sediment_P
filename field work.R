@@ -353,9 +353,11 @@ bite_per_event_IO_resid <-
   )
 bite_per_event_IO_resid
 
+#控制IO後，區域差異還在不在
 kruskal.test(event_resid ~ Region, data = bite_by_quadrat)
 kruskal.test(bite_per_event_resid ~ Region, data = bite_by_quadrat)
 
+#看total bite rate是受event rate影響還是bite per event
 cor.test(bite_by_quadrat$total_bite_rate,
          bite_by_quadrat$event_rate,
          method = "spearman")
@@ -363,6 +365,7 @@ cor.test(bite_by_quadrat$total_bite_rate,
          bite_by_quadrat$mean_bites_per_event,
          method = "spearman")
 
+#organic and inorganic matter對event rate的關係
 cor.test(bite_by_quadrat$event_rate,
          bite_by_quadrat$org_pct,
          method = "spearman")
@@ -370,12 +373,24 @@ cor.test(bite_by_quadrat$event_rate,
          bite_by_quadrat$inorg_pct,
          method = "spearman")
 
+#organic and inorganic matter對bite per event的關係
 cor.test(bite_by_quadrat$mean_bites_per_event,
          bite_by_quadrat$org_pct,
          method = "spearman")
 cor.test(bite_by_quadrat$mean_bites_per_event,
          bite_by_quadrat$inorg_pct,
          method = "spearman")
+
+stat_event <- bite_by_quadrat %>%
+  group_by(Region) %>%
+  summarise(
+    rho = cor(org_pct, event_rate, method = "spearman"),
+    p = cor.test(org_pct, event_rate, method = "spearman")$p.value,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    label = sprintf("ρ = %.2f\np = %.3f", rho, p)
+  )
 
 event_rate_org <- ggplot(bite_by_quadrat, aes(org_pct, event_rate)) +
   geom_point() +
@@ -385,8 +400,26 @@ event_rate_org <- ggplot(bite_by_quadrat, aes(org_pct, event_rate)) +
   labs(
     x = "Organic matter (%)",
     y = "Feeding event rate"
+  ) +
+  geom_text(
+    data = stat_event,
+    aes(x = Inf, y = Inf, label = label),
+    hjust = 1.1, vjust = 1.2,
+    inherit.aes = F,
+    size = 4
   )
 event_rate_org
+
+stat_bpe <- bite_by_quadrat %>%
+  group_by(Region) %>%
+  summarise(
+    rho = cor(org_pct, mean_bites_per_event, method = "spearman"),
+    p   = cor.test(org_pct, mean_bites_per_event, method = "spearman")$p.value,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    label = sprintf("ρ = %.2f\np = %.3f", rho, p)
+  )
 
 bite_per_event_org <- ggplot(bite_by_quadrat, aes(org_pct, mean_bites_per_event)) +
   geom_point() +
@@ -396,6 +429,13 @@ bite_per_event_org <- ggplot(bite_by_quadrat, aes(org_pct, mean_bites_per_event)
   labs(
     x = "Organic matter (%)",
     y = "Bite per event"
+  ) +
+  geom_text(
+    data = stat_bpe,
+    aes(x = Inf, y = Inf, label = label),
+    hjust = 1.1, vjust = 1.2,
+    inherit.aes = FALSE,
+    size = 4
   )
 bite_per_event_org
 
