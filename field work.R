@@ -240,7 +240,7 @@ bite_herb_site <- bite %>%
 
 kruskal.test(bite_rate ~ Region, data = bite_herb_site)
 
-# Bite rate by individual----
+# Bite rate by event----
 
 bite_by_quadrat <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
@@ -303,141 +303,34 @@ pairwise.wilcox.test(
   p.adjust.method = "BH"
 )
 
-# Bite rate considered of organic/inorganic percentage----
-
-IO_site <- IO %>%
-  group_by(Region, site) %>%
-  summarise(
-    org_pct = mean(org_pct, na.rm = T),
-    inorg_pct = mean(inorg_pct, na.rm = T),
-    salt_pct = mean(salt_pct, na.rm = T),
-    .groups = "drop"
-  )
-
-bite_IO <- bite_herb_site %>%
-  left_join(IO_site, by = c("Region", "site"))
-
-bite_region_IO <- lm(bite_rate ~ Region + org_pct, data = bite_IO)
-summary(bite_region_IO)
-
-bite_by_quadrat <- bite_by_quadrat %>%
-  left_join(IO_site, by = c("Region", "site"))
-
-IO_event <- lm(event_rate ~ org_pct + inorg_pct, data = bite_by_quadrat)
-summary(IO_event)
-
-bite_by_quadrat$event_resid <- resid(IO_event)
-
-event_IO_resid <- ggplot(bite_by_quadrat, aes(Region, event_resid)) +
-  geom_boxplot(outlier.shape = NA, fill = region_color) +
-  geom_jitter(width = 0.1) +
-  theme_bw() +
-  labs(
-    y = "Feeding event rates (residuals, adjusted for IO)"
-  )
-event_IO_resid
-
-IO_bite_per_event <- lm(mean_bites_per_event ~ org_pct + inorg_pct, 
-                        data = bite_by_quadrat)
-summary(IO_bite_per_event)
-
-bite_by_quadrat$bite_per_event_resid <- resid(IO_bite_per_event)
-
-bite_per_event_IO_resid <- 
-  ggplot(bite_by_quadrat, aes(Region, bite_per_event_resid)) +
-  geom_boxplot(outlier.shape = NA, fill = region_color) +
-  geom_jitter(width = 0.1) +
-  theme_bw()+
-  labs(
-    y = "Bites per event (residuals, adjusted for sediment)"
-  )
-bite_per_event_IO_resid
-
-#控制IO後，區域差異還在不在
-kruskal.test(event_resid ~ Region, data = bite_by_quadrat)
-kruskal.test(bite_per_event_resid ~ Region, data = bite_by_quadrat)
-
-#看total bite rate是受event rate影響還是bite per event
+# 檢查 total bite rate 是由哪個 component 驅動
 cor.test(bite_by_quadrat$total_bite_rate,
          bite_by_quadrat$event_rate,
          method = "spearman")
+
 cor.test(bite_by_quadrat$total_bite_rate,
          bite_by_quadrat$mean_bites_per_event,
          method = "spearman")
 
-#organic and inorganic matter對event rate的關係
-cor.test(bite_by_quadrat$event_rate,
-         bite_by_quadrat$org_pct,
-         method = "spearman")
-cor.test(bite_by_quadrat$event_rate,
-         bite_by_quadrat$inorg_pct,
-         method = "spearman")
+# Bite rate considered of organic/inorganic percentage----
 
-#organic and inorganic matter對bite per event的關係
-cor.test(bite_by_quadrat$mean_bites_per_event,
-         bite_by_quadrat$org_pct,
-         method = "spearman")
-cor.test(bite_by_quadrat$mean_bites_per_event,
-         bite_by_quadrat$inorg_pct,
-         method = "spearman")
-
-stat_event <- bite_by_quadrat %>%
-  group_by(Region) %>%
+# 整理 IO data 到 site level
+IO_site <- IO %>%
+  group_by(Region, site) %>%
   summarise(
-    rho = cor(org_pct, event_rate, method = "spearman"),
-    p = cor.test(org_pct, event_rate, method = "spearman")$p.value,
+    org_pct = mean(org_pct, na.rm = TRUE),
+    inorg_pct = mean(inorg_pct, na.rm = TRUE),
+    salt_pct = mean(salt_pct, na.rm = TRUE),
     .groups = "drop"
-  ) %>%
-  mutate(
-    label = sprintf("ρ = %.2f\np = %.3f", rho, p)
   )
 
-event_rate_org <- ggplot(bite_by_quadrat, aes(org_pct, event_rate)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE) +
-  facet_wrap(~Region) +
-  theme_bw() +
-  labs(
-    x = "Organic matter (%)",
-    y = "Feeding event rate"
-  ) +
-  geom_text(
-    data = stat_event,
-    aes(x = Inf, y = Inf, label = label),
-    hjust = 1.1, vjust = 1.2,
-    inherit.aes = F,
-    size = 4
-  )
-event_rate_org
+# 合併到 bite rate (site level)
+bite_IO <- bite_herb_site %>%
+  left_join(IO_site, by = c("Region", "site"))
 
-stat_bpe <- bite_by_quadrat %>%
-  group_by(Region) %>%
-  summarise(
-    rho = cor(org_pct, mean_bites_per_event, method = "spearman"),
-    p   = cor.test(org_pct, mean_bites_per_event, method = "spearman")$p.value,
-    .groups = "drop"
-  ) %>%
-  mutate(
-    label = sprintf("ρ = %.2f\np = %.3f", rho, p)
-  )
-
-bite_per_event_org <- ggplot(bite_by_quadrat, aes(org_pct, mean_bites_per_event)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE) +
-  facet_wrap(~Region) +
-  theme_bw() +
-  labs(
-    x = "Organic matter (%)",
-    y = "Bite per event"
-  ) +
-  geom_text(
-    data = stat_bpe,
-    aes(x = Inf, y = Inf, label = label),
-    hjust = 1.1, vjust = 1.2,
-    inherit.aes = FALSE,
-    size = 4
-  )
-bite_per_event_org
+# 檢查 Region + organic matter 對 bite rate 的影響
+bite_region_IO <- lm(bite_rate ~ Region + org_pct, data = bite_IO)
+summary(bite_region_IO)
 
 IO_site_long <- IO_site %>%
   mutate(org_pct = org_pct / 100,
@@ -516,3 +409,5 @@ herb_urchin_sum_region <-
   theme_bw() +
   labs(x = "Region", y = "Total number of urchins", fill = "Genus")
 herb_urchin_sum_region
+
+
