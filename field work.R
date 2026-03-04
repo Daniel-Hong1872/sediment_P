@@ -332,6 +332,14 @@ bite_IO <- bite_herb_site %>%
 bite_region_IO <- lm(bite_rate ~ Region + org_pct, data = bite_IO)
 summary(bite_region_IO)
 
+#check the relationship between org and event rate/bite per event
+cor.test(bite_by_quadrat$event_rate,
+         bite_by_quadrat$org_pct,
+         method="spearman")
+cor.test(bite_by_quadrat$mean_bites_per_event,
+         bite_by_quadrat$org_pct,
+         method="spearman")
+
 IO_site_long <- IO_site %>%
   mutate(org_pct = org_pct / 100,
          inorg_pct = inorg_pct / 100,
