@@ -75,7 +75,8 @@ sed_site_mean <- sediment %>%
     .groups = "drop"
   )
 
-sed_depth <- ggplot(sed_site_mean, aes(x = depth, y = sediment_weight)) + 
+sed_depth <- 
+  ggplot(sed_site_mean, aes(x = depth, y = sediment_weight)) + 
   geom_point() +
   geom_smooth(method = "lm", se = F) +
   facet_wrap(~Region) +
@@ -83,7 +84,8 @@ sed_depth <- ggplot(sed_site_mean, aes(x = depth, y = sediment_weight)) +
 
 sed_depth
 
-sed_temp <- ggplot(sed_site_mean, aes(x = temperature, y = sediment_weight)) + 
+sed_temp <- 
+  ggplot(sed_site_mean, aes(x = temperature, y = sediment_weight)) + 
   geom_point() +
   geom_smooth(method = "lm", se = F) +
   facet_wrap(~Region) +
@@ -91,20 +93,17 @@ sed_temp <- ggplot(sed_site_mean, aes(x = temperature, y = sediment_weight)) +
 
 sed_temp
 
-sed_region <- ggplot(sed_site_mean, aes(x = Region, y = sediment_weight)) +
-  geom_boxplot(fill = region_color) +
+sed_region <- 
+  ggplot(sed_site_mean, aes(Region, sediment_weight, fill = Region)) +
+  geom_boxplot() +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
   geom_jitter() +
   theme_bw()
 
 sed_region
 
 # Relationship between P concentration & Region----
-
-bulk_P_model1 <- lmer(bulk_P_cmgg ~ Region + (1 | site), data = P)
-summary(bulk_P_model1)
-
-algae_P_model1 <- lmer(algae_P_cmgg ~ Region + (1 | site), data = P)
-summary(algae_P_model1)
 
 P_site_mean <- P %>% 
   group_by(Region, site) %>%
@@ -114,18 +113,22 @@ P_site_mean <- P %>%
     .groups = "drop"
   )
 
-bulk_P_region <- ggplot(P_site_mean, aes(x = Region, y = bulk_P)) +
-  geom_boxplot(fill = region_color) +
+bulk_P_region <- 
+  ggplot(P_site_mean, aes(Region, bulk_P, fill = Region)) +
+  geom_boxplot() +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
   geom_jitter() +
   theme_bw()
-
 bulk_P_region
 
-algae_P_region <- ggplot(P_site_mean, aes(x = Region, y = algae_P)) +
-  geom_boxplot(fill = region_color) +
+algae_P_region <- 
+  ggplot(P_site_mean, aes(Region, algae_P, fill = Region)) +
+  geom_boxplot() +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
   geom_jitter() +
   theme_bw()
-
 algae_P_region
 
 kruskal.test(bulk_P ~ Region, data = P_site_mean)
@@ -158,7 +161,7 @@ bite <- bite %>%
 bite_quad_trophic <- bite %>%
   group_by(Region, site, Camera, `trophic group`) %>%
   summarise(
-    total_bites = sum(bites, na.rm = TRUE),
+    total_bites = sum(bites, na.rm = T),
     .groups = "drop"
   ) %>%
   mutate(
@@ -172,14 +175,14 @@ trophic_color <- c(
   "Omnivore" = "#BEAED4"
 )
 
-trophic_region <- ggplot(
-  bite_quad_trophic, 
-  aes(x = `trophic group`, y = bite_rate, fill = `trophic group`)) +
+trophic_region <- 
+  ggplot(bite_quad_trophic, 
+         aes(`trophic group`, bite_rate, fill = `trophic group`)) +
   geom_boxplot(outlier.shape = NA) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
   facet_wrap(~ Region, nrow = 1) +
-  scale_fill_manual(values = trophic_color, drop = FALSE) +
+  scale_fill_manual(values = trophic_color, drop = F) +
   theme_bw() +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1),
@@ -195,7 +198,7 @@ bite_quad_func <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
   group_by(Region, site, Camera, `herbivore functional group`) %>%
   summarise(
-    total_bites = sum(bites, na.rm = TRUE),
+    total_bites = sum(bites, na.rm = T),
     .groups = "drop"
   ) %>%
   mutate(
@@ -210,15 +213,14 @@ func_group_color <- c(
   "small excavators" = "#BEAED4"
 )
 
-herb_func_region <- ggplot(
-  bite_quad_func,
-  aes(x = `herbivore functional group`, y = bite_rate,
+herb_func_region <- 
+  ggplot(bite_quad_func, aes(`herbivore functional group`, bite_rate,
       fill = `herbivore functional group`)) +
   geom_boxplot(outlier.shape = NA) +
   geom_jitter(width = 0.15, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
   facet_wrap(~ Region, nrow = 1) +
-  scale_fill_manual(values = func_group_color, drop = FALSE) +
+  scale_fill_manual(values = func_group_color, drop = F) +
   theme_bw() +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1),
@@ -229,26 +231,15 @@ herb_func_region <- ggplot(
   )
 herb_func_region
 
-
-bite_herb_site <- bite %>%
-  filter(`trophic group` == "Herbivore") %>%
-  group_by(Region, site) %>%
-  summarise(
-    bite_rate = mean(bite_rate, na.rm = T),
-    .groups = "drop"
-  )
-
-kruskal.test(bite_rate ~ Region, data = bite_herb_site)
-
 # Bite rate by event----
 
 bite_by_quadrat <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
   group_by(Region, site, Camera) %>%
   summarise(
-    total_bites = sum(bites, na.rm = TRUE),
+    total_bites = sum(bites, na.rm = T),
     n_events = n(),
-    mean_bites_per_event = mean(bites, na.rm = TRUE),
+    mean_bites_per_event = mean(bites, na.rm = T),
     .groups = "drop"
   ) %>%
   mutate(
@@ -256,8 +247,11 @@ bite_by_quadrat <- bite %>%
     event_rate = n_events * 60 / duration
   )
 
-bite_per_event <- ggplot(bite_by_quadrat, aes(Region, mean_bites_per_event)) +
-  geom_boxplot(outlier.shape = NA, fill = region_color) +
+bite_per_event <- 
+  ggplot(bite_by_quadrat, aes(Region, mean_bites_per_event, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
   theme_bw() +
@@ -267,8 +261,11 @@ bite_per_event <- ggplot(bite_by_quadrat, aes(Region, mean_bites_per_event)) +
 bite_per_event
 
 
-total_bite_rate <- ggplot(bite_by_quadrat, aes(Region, total_bite_rate)) +
-  geom_boxplot(outlier.shape = NA, fill = region_color) +
+total_bite_rate <- 
+  ggplot(bite_by_quadrat, aes(Region, total_bite_rate, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
   theme_bw() +
@@ -278,8 +275,11 @@ total_bite_rate <- ggplot(bite_by_quadrat, aes(Region, total_bite_rate)) +
 total_bite_rate
 
 
-event_rate <- ggplot(bite_by_quadrat, aes(Region, event_rate)) +
-  geom_boxplot(outlier.shape = NA, fill = region_color) +
+event_rate <- 
+  ggplot(bite_by_quadrat, aes(Region, event_rate, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
   theme_bw() +
@@ -318,32 +318,27 @@ cor.test(bite_by_quadrat$total_bite_rate,
 IO_site <- IO %>%
   group_by(Region, site) %>%
   summarise(
-    org_pct = mean(org_pct, na.rm = TRUE),
-    inorg_pct = mean(inorg_pct, na.rm = TRUE),
-    salt_pct = mean(salt_pct, na.rm = TRUE),
+    org_pct = mean(org_pct, na.rm = T),
+    inorg_pct = mean(inorg_pct, na.rm = T),
+    salt_pct = mean(salt_pct, na.rm = T),
     .groups = "drop"
   )
 
-# 合併到 bite rate (site level)
-bite_IO <- bite_herb_site %>%
+bite_by_quadrat <- bite_by_quadrat %>% 
   left_join(IO_site, by = c("Region", "site"))
 
-# 檢查 Region + organic matter 對 bite rate 的影響
-bite_region_IO <- lm(bite_rate ~ Region + org_pct, data = bite_IO)
-summary(bite_region_IO)
-
-#check the relationship between org and event rate/bite per event
+#check the relationship between org and total bite rate/event rate/bite per event
+cor.test(bite_by_quadrat$total_bite_rate,
+         bite_by_quadrat$org_pct,
+         method = "spearman")
 cor.test(bite_by_quadrat$event_rate,
          bite_by_quadrat$org_pct,
-         method="spearman")
+         method = "spearman")
 cor.test(bite_by_quadrat$mean_bites_per_event,
          bite_by_quadrat$org_pct,
-         method="spearman")
+         method = "spearman")
 
 IO_site_long <- IO_site %>%
-  mutate(org_pct = org_pct / 100,
-         inorg_pct = inorg_pct / 100,
-         salt_pct = salt_pct / 100) %>%
   select(Region, site, org_pct, inorg_pct, salt_pct) %>%
   pivot_longer(
     cols = c(org_pct, inorg_pct, salt_pct), 
@@ -357,25 +352,23 @@ sediment_color <- c(
   "salt_pct" = "#999999"
 )
 
-IO_pct <- ggplot(
-  IO_site_long, aes(x = site, y = percentage, fill = component)
-  ) + 
+IO_pct <- 
+  ggplot(IO_site_long, aes(site, percentage, fill = component)) + 
   geom_bar(
     stat = "identity",
-    position = "fill",
+    position = "stack",
     color = "black",
     width = 0.8
   ) +
   facet_wrap(~ Region, scales = "free_x") +
-  scale_y_continuous(labels = scales::percent_format()) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
   scale_fill_manual(
     values = sediment_color,
     labels = c(
       "org_pct" = "Organic matter",
       "inorg_pct" = "Inorganic matter",
       "salt_pct" = "Salt"
-    )
-  ) +
+    )) +
   theme_bw()+
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1)) +
@@ -411,11 +404,47 @@ urchin_color <- c(
 )
 
 herb_urchin_sum_region <- 
-  ggplot(herb_urchin_region, aes(x = Region, y = Total, fill = Genus)) +
+  ggplot(herb_urchin_region, aes(Region, Total, fill = Genus)) +
   geom_col() +
   scale_fill_manual(values = urchin_color, drop = F) +
   theme_bw() +
   labs(x = "Region", y = "Total number of urchins", fill = "Genus")
 herb_urchin_sum_region
 
+#Bite rate consider bulk_P and algae_P
+P_data <- P %>%
+  mutate(Camera = gsub("S", "C", sediment)) %>%
+  select(Region, site, Camera, bulk_P_cmgg, algae_P_cmgg)
 
+bite_by_quadrat <- bite_by_quadrat %>%
+  left_join(P_data, by = c("Region", "site", "Camera"))
+
+cor.test(P_data$bulk_P_cmgg,
+         P_data$algae_P_cmgg,
+         method = "spearman")
+
+cor.test(bite_by_quadrat$total_bite_rate,
+         bite_by_quadrat$algae_P_cmgg,
+         method = "spearman")
+cor.test(bite_by_quadrat$event_rate,
+         bite_by_quadrat$algae_P_cmgg,
+         method = "spearman")
+cor.test(bite_by_quadrat$mean_bites_per_event,
+         bite_by_quadrat$algae_P_cmgg,
+         method = "spearman")
+
+event_rate_P <- 
+  ggplot(bite_by_quadrat, aes(algae_P_cmgg, event_rate)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+event_rate_P
+
+lmer(event_rate ~ algae_P_cmgg + (1|site), data=bite_by_quadrat)
+
+#event rate ~ P (each region)
+event_rate_P_region <- 
+  ggplot(bite_by_quadrat, aes(algae_P_cmgg, event_rate, color = Region)) +
+  geom_point(size = 2) +
+  scale_color_manual(values = region_color) +
+  geom_smooth(method = "lm", se = F)
+event_rate_P_region
