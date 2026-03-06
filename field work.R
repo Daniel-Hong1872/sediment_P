@@ -113,6 +113,20 @@ P_site_mean <- P %>%
     .groups = "drop"
   )
 
+kruskal.test(bulk_P ~ Region, data = P_site_mean)
+pairwise.wilcox.test(
+  P_site_mean$bulk_P, 
+  P_site_mean$Region,
+  p.adjust.method = "BH"
+)
+
+kruskal.test(algae_P ~ Region, data = P_site_mean)
+pairwise.wilcox.test(
+  P_site_mean$algae_P, 
+  P_site_mean$Region,
+  p.adjust.method = "BH"
+)
+
 bulk_P_region <- 
   ggplot(P_site_mean, aes(Region, bulk_P, fill = Region)) +
   geom_boxplot() +
@@ -131,19 +145,9 @@ algae_P_region <-
   theme_bw()
 algae_P_region
 
-kruskal.test(bulk_P ~ Region, data = P_site_mean)
-pairwise.wilcox.test(
-  P_site_mean$bulk_P, 
-  P_site_mean$Region,
-  p.adjust.method = "BH"
-)
-
-kruskal.test(algae_P ~ Region, data = P_site_mean)
-pairwise.wilcox.test(
-  P_site_mean$algae_P, 
-  P_site_mean$Region,
-  p.adjust.method = "BH"
-)
+cor.test(P_site_mean$bulk_P,
+         P_site_mean$algae_P,
+         method = "spearman")
 
 # Fish bite----
 
@@ -247,50 +251,32 @@ bite_by_quadrat <- bite %>%
     event_rate = n_events * 60 / duration
   )
 
-bite_per_event <- 
-  ggplot(bite_by_quadrat, aes(Region, mean_bites_per_event, fill = Region)) +
+bite_by_quadrat_region <- bite_by_quadrat %>%
+  select(Region, total_bite_rate, event_rate, mean_bites_per_event) %>%
+  pivot_longer(
+    cols = c(total_bite_rate, event_rate, mean_bites_per_event),
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(metric = factor(
+    metric, levels = c("total_bite_rate","event_rate","mean_bites_per_event"), 
+    labels = c("Total bite rate\n(bites/hr)",
+               "Feeding event rate\n(events/hr)",
+               "Bites per event\n(bites/event)")
+  ))
+
+ggplot(bite_by_quadrat_region, aes(Region, value, fill = Region)) +
   geom_boxplot(outlier.shape = NA) +
-  scale_fill_manual(values = region_color) +
-  guides(fill = "none") +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
-  theme_bw() +
-  labs(
-    y = expression(Bites~per~event~(bites~events^{-1}))
-  )
-bite_per_event
-
-
-total_bite_rate <- 
-  ggplot(bite_by_quadrat, aes(Region, total_bite_rate, fill = Region)) +
-  geom_boxplot(outlier.shape = NA) +
   scale_fill_manual(values = region_color) +
+  facet_wrap(~metric, scales = "free_y", nrow = 1) +
   guides(fill = "none") +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red") +
   theme_bw() +
   labs(
-    y = expression(Total~bite~rate~(bites~m^{-2}~hr^{-1}))
-  )
-total_bite_rate
-
-
-event_rate <- 
-  ggplot(bite_by_quadrat, aes(Region, event_rate, fill = Region)) +
-  geom_boxplot(outlier.shape = NA) +
-  scale_fill_manual(values = region_color) +
-  guides(fill = "none") +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red") +
-  theme_bw() +
-  labs(
-    y = expression(Feeding~events~rate~(events~m^{-2}~hr^{-1}))
-  )
-event_rate
-
-(total_bite_rate|event_rate|bite_per_event) +
-  plot_annotation(
-    title = "Herbivore Grazing Pressure"
+    title = "Herbivore Grazing Pressure",
+    x = "Region",
+    y = NULL
   )
 
 kruskal.test(total_bite_rate ~ Region, data = bite_by_quadrat)
@@ -379,6 +365,91 @@ IO_pct <-
   )
 IO_pct  
 
+#Bite rate consider bulk_P and algae_P----
+
+P_data <- P %>%
+  mutate(Camera = gsub("S", "C", sediment)) %>%
+  select(Region, site, Camera, bulk_P_cmgg, algae_P_cmgg)
+
+bite_by_quadrat <- bite_by_quadrat %>%
+  left_join(P_data, by = c("Region", "site", "Camera"))
+
+cor.test(bite_by_quadrat$total_bite_rate,
+         bite_by_quadrat$algae_P_cmgg,
+         method = "spearman")
+cor.test(bite_by_quadrat$event_rate,
+         bite_by_quadrat$algae_P_cmgg,
+         method = "spearman")
+cor.test(bite_by_quadrat$mean_bites_per_event,
+         bite_by_quadrat$algae_P_cmgg,
+         method = "spearman")
+
+#Modeling----
+lmer(total_bite_rate ~ org_pct + (1|site), data=bite_by_quadrat)
+lmer(event_rate ~ org_pct + (1|site), data=bite_by_quadrat)
+lmer(mean_bites_per_event ~ org_pct + (1|site), data=bite_by_quadrat)
+
+lmer(total_bite_rate ~ algae_P_cmgg + (1|site), data=bite_by_quadrat)
+lmer(event_rate ~ algae_P_cmgg + (1|site), data=bite_by_quadrat)
+lmer(mean_bites_per_event ~ algae_P_cmgg + (1|site), data=bite_by_quadrat)
+
+#plot
+bite_by_quadrat_env <- bite_by_quadrat %>%
+  pivot_longer(
+    cols = c(total_bite_rate, event_rate, mean_bites_per_event),
+    names_to = "response",
+    values_to = "response_value"
+  ) %>%
+  pivot_longer(
+    cols = c(org_pct, algae_P_cmgg),
+    names_to = "predictor",
+    values_to = "predictor_value"
+  ) %>%
+  mutate(
+    response = factor(
+      response,
+      levels = c("total_bite_rate", "event_rate", "mean_bites_per_event"),
+      labels = c("Total bite rate", "Event rate", "Bites per event")
+    ),
+    predictor = factor(
+      predictor,
+      levels = c("algae_P_cmgg", "org_pct"),
+      labels = c("Algal phosphorus (mg/g)", "Organic matter (%)")
+    )
+  )
+
+grazing_org_P_label <- bite_by_quadrat_env %>%
+  group_by(response, predictor) %>%
+  summarise(
+    rho = cor(predictor_value, response_value,
+              method = "spearman", use = "complete.obs"),
+    p = cor.test(predictor_value, response_value,
+                 method = "spearman")$p.value,
+    .groups = "drop"
+  ) %>%
+  mutate(label = paste0("ρ = ", round(rho, 2),
+                        "\np = ", signif(p, 2)))
+  
+grazing_org_P <- 
+  ggplot(bite_by_quadrat_env, aes(predictor_value, response_value)) +
+  geom_point(alpha = 0.8) +
+  geom_smooth(method = "lm", linewidth = 0.8) +
+  geom_text(
+    data = grazing_org_P_label,
+    aes(label = label),
+    x = Inf,
+    y = Inf,
+    hjust = 1.1,
+    vjust = 1.1
+  ) +
+  facet_grid(response ~ predictor, scales = "free") +
+  labs(
+    x = NULL,
+    y = NULL,
+    title = "Relationship between environmental variables and herbivore grazing"
+  )
+grazing_org_P
+
 #sea urchin----
 
 XLQ_ur <- read_excel("urchin density.xlsx", sheet = "XLQ") %>% 
@@ -411,40 +482,3 @@ herb_urchin_sum_region <-
   labs(x = "Region", y = "Total number of urchins", fill = "Genus")
 herb_urchin_sum_region
 
-#Bite rate consider bulk_P and algae_P
-P_data <- P %>%
-  mutate(Camera = gsub("S", "C", sediment)) %>%
-  select(Region, site, Camera, bulk_P_cmgg, algae_P_cmgg)
-
-bite_by_quadrat <- bite_by_quadrat %>%
-  left_join(P_data, by = c("Region", "site", "Camera"))
-
-cor.test(P_data$bulk_P_cmgg,
-         P_data$algae_P_cmgg,
-         method = "spearman")
-
-cor.test(bite_by_quadrat$total_bite_rate,
-         bite_by_quadrat$algae_P_cmgg,
-         method = "spearman")
-cor.test(bite_by_quadrat$event_rate,
-         bite_by_quadrat$algae_P_cmgg,
-         method = "spearman")
-cor.test(bite_by_quadrat$mean_bites_per_event,
-         bite_by_quadrat$algae_P_cmgg,
-         method = "spearman")
-
-event_rate_P <- 
-  ggplot(bite_by_quadrat, aes(algae_P_cmgg, event_rate)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-event_rate_P
-
-lmer(event_rate ~ algae_P_cmgg + (1|site), data=bite_by_quadrat)
-
-#event rate ~ P (each region)
-event_rate_P_region <- 
-  ggplot(bite_by_quadrat, aes(algae_P_cmgg, event_rate, color = Region)) +
-  geom_point(size = 2) +
-  scale_color_manual(values = region_color) +
-  geom_smooth(method = "lm", se = F)
-event_rate_P_region
