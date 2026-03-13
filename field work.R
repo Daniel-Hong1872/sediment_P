@@ -81,7 +81,6 @@ sed_depth <-
   geom_smooth(method = "lm", se = F) +
   facet_wrap(~Region) +
   theme_bw()
-
 sed_depth
 
 sed_temp <- 
@@ -90,7 +89,6 @@ sed_temp <-
   geom_smooth(method = "lm", se = F) +
   facet_wrap(~Region) +
   theme_bw()
-
 sed_temp
 
 sed_region <- 
@@ -100,7 +98,6 @@ sed_region <-
   guides(fill = "none") +
   geom_jitter() +
   theme_bw()
-
 sed_region
 
 # Relationship between P concentration & Region----
@@ -112,20 +109,6 @@ P_site_mean <- P %>%
     algae_P = mean(algae_P_cmgg, na.rm = T),
     .groups = "drop"
   )
-
-kruskal.test(bulk_P ~ Region, data = P_site_mean)
-pairwise.wilcox.test(
-  P_site_mean$bulk_P, 
-  P_site_mean$Region,
-  p.adjust.method = "BH"
-)
-
-kruskal.test(algae_P ~ Region, data = P_site_mean)
-pairwise.wilcox.test(
-  P_site_mean$algae_P, 
-  P_site_mean$Region,
-  p.adjust.method = "BH"
-)
 
 bulk_P_region <- 
   ggplot(P_site_mean, aes(Region, bulk_P, fill = Region)) +
@@ -144,6 +127,20 @@ algae_P_region <-
   geom_jitter() +
   theme_bw()
 algae_P_region
+
+kruskal.test(bulk_P ~ Region, data = P_site_mean)
+pairwise.wilcox.test(
+  P_site_mean$bulk_P, 
+  P_site_mean$Region,
+  p.adjust.method = "BH"
+)
+
+kruskal.test(algae_P ~ Region, data = P_site_mean)
+pairwise.wilcox.test(
+  P_site_mean$algae_P, 
+  P_site_mean$Region,
+  p.adjust.method = "BH"
+)
 
 cor.test(P_site_mean$bulk_P,
          P_site_mean$algae_P,
@@ -265,7 +262,8 @@ bite_by_quadrat_region <- bite_by_quadrat %>%
                "Bites per event\n(bites/event)")
   ))
 
-ggplot(bite_by_quadrat_region, aes(Region, value, fill = Region)) +
+herb_grazing_pressure <- 
+  ggplot(bite_by_quadrat_region, aes(Region, value, fill = Region)) +
   geom_boxplot(outlier.shape = NA) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
@@ -278,6 +276,7 @@ ggplot(bite_by_quadrat_region, aes(Region, value, fill = Region)) +
     x = "Region",
     y = NULL
   )
+herb_grazing_pressure
 
 kruskal.test(total_bite_rate ~ Region, data = bite_by_quadrat)
 kruskal.test(event_rate ~ Region, data = bite_by_quadrat)
@@ -300,18 +299,13 @@ cor.test(bite_by_quadrat$total_bite_rate,
 
 # Bite rate considered of organic/inorganic percentage----
 
-# 整理 IO data 到 site level
-IO_site <- IO %>%
-  group_by(Region, site) %>%
-  summarise(
-    org_pct = mean(org_pct, na.rm = T),
-    inorg_pct = mean(inorg_pct, na.rm = T),
-    salt_pct = mean(salt_pct, na.rm = T),
-    .groups = "drop"
-  )
+# 整理 IO data
+IO_quadrat <- IO %>%
+  mutate(Camera = gsub("S", "C", sediment)) %>%
+  select(Region, site, Camera, org_pct, inorg_pct, salt_pct)
 
 bite_by_quadrat <- bite_by_quadrat %>% 
-  left_join(IO_site, by = c("Region", "site"))
+  left_join(IO_quadrat, by = c("Region", "site", "Camera"))
 
 #check the relationship between org and total bite rate/event rate/bite per event
 cor.test(bite_by_quadrat$total_bite_rate,
@@ -323,6 +317,15 @@ cor.test(bite_by_quadrat$event_rate,
 cor.test(bite_by_quadrat$mean_bites_per_event,
          bite_by_quadrat$org_pct,
          method = "spearman")
+
+IO_site <- IO %>%
+  group_by(Region, site) %>%
+  summarise(
+    org_pct = mean(org_pct, na.rm = T),
+    inorg_pct = mean(inorg_pct, na.rm = T),
+    salt_pct = mean(salt_pct, na.rm = T),
+    .groups = "drop"
+  )
 
 IO_site_long <- IO_site %>%
   select(Region, site, org_pct, inorg_pct, salt_pct) %>%
