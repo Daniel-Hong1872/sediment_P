@@ -1,11 +1,11 @@
 setwd("C:/Users/dan91/OneDrive/桌面/Field work")
+library(tidyverse)
 library(readxl)
-library(dplyr)
-library(forcats)
 library(lme4)
-library(ggplot2)
+library(lmerTest)
+library(emmeans)
 library(patchwork)
-library(tidyr)
+library(performance)
 
 sediment <- read_excel("CNP_data.xlsx", sheet = "sediment", na = "NA")
 P <- read_excel("CNP_data.xlsx", sheet = "P", na = "NA")
@@ -50,16 +50,6 @@ IO <- IO %>%
     org_pct = org_g   / subsample * 100
   )
 
-# Relationship between sediment weight & Region/environmental parameters----
-
-sed_model1 <- lmer(sed_wg ~ Region + depth + temperature + (1 | site), 
-                data = sediment)
-summary(sed_model1)
-
-sed_model2 <- lmer(sed_wg ~ Region * depth + Region * temperature + 
-                  (1 | site), data = sediment)
-summary(sed_model2)
-
 region_color <- c(
   "GI" = "#4CAF50",
   "NE" = "#3288BD",
@@ -99,6 +89,38 @@ sed_region <-
   geom_jitter() +
   theme_bw()
 sed_region
+
+#sea urchin----
+
+XLQ_ur <- read_excel("urchin density.xlsx", sheet = "XLQ") %>% 
+  mutate(Region = "XLQ")
+GI_ur <- read_excel("urchin density.xlsx", sheet = "GI") %>%
+  mutate(Region = "GI")
+NE_ur <- read_excel("urchin density.xlsx", sheet = "NE") %>%
+  mutate(Region = "NE")
+
+urchin_all <- bind_rows(XLQ_ur, GI_ur, NE_ur)
+
+herb_urchin <- urchin_all %>%
+  filter(Genus %in% c("Diadema", "Echinothrix", "Stomopneustes"))
+
+herb_urchin_region <- herb_urchin %>%
+  group_by(Region, Genus) %>%
+  summarise(Total = n(), .groups = "drop")
+
+urchin_color <- c(
+  "Diadema" = "#6BAED6",
+  "Echinothrix" = "#8FCB9B",
+  "Stomopneustes" = "#6C6F9A"
+)
+
+herb_urchin_sum_region <- 
+  ggplot(herb_urchin_region, aes(Region, Total, fill = Genus)) +
+  geom_col() +
+  scale_fill_manual(values = urchin_color, drop = F) +
+  theme_bw() +
+  labs(x = "Region", y = "Total number of urchins", fill = "Genus")
+herb_urchin_sum_region
 
 # Relationship between P concentration & Region----
 
@@ -234,6 +256,12 @@ herb_func_region
 
 # Bite rate by event----
 
+all_camera <- expand.grid(
+  Region = unique(bite$Region),
+  site = unique(bite$site),
+  Camera = c("C1", "C2", "C3")
+)
+
 bite_by_quadrat <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
   group_by(Region, site, Camera) %>%
@@ -242,13 +270,49 @@ bite_by_quadrat <- bite %>%
     n_events = n(),
     mean_bites_per_event = mean(bites, na.rm = T),
     .groups = "drop"
-  ) %>%
+  ) 
+
+bite_by_quadrat <- all_camera %>%
+  left_join(bite_by_quadrat, by = c("Region", "site", "Camera"))
+
+bite_by_quadrat <- bite_by_quadrat %>%
   mutate(
+    total_bites = replace_na(total_bites, 0),
+    n_events = replace_na(n_events, 0),
     total_bite_rate = total_bites * 60 / duration,
     event_rate = n_events * 60 / duration
   )
 
-bite_by_quadrat_region <- bite_by_quadrat %>%
+# occurrence of herbivore feeding among regions----
+
+camera_zero_summary <- bite_by_quadrat %>%
+  mutate(has_herbivore = n_events > 0) %>%
+  group_by(Region) %>%
+  summarise(
+    n_camera = n(),
+    n_with_herbivore = sum(has_herbivore),
+    prop_with_herbivore = mean(has_herbivore),
+    prop_zero = mean(!has_herbivore),
+    .groups = "drop"
+  )
+
+ggplot(camera_zero_summary, aes(x = Region, y = prop_with_herbivore, fill = Region)) +
+  geom_col() +
+  scale_fill_manual(values = region_color) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = "Proportion of cameras with herbivore feeding",
+    title = "Occurrence of herbivore feeding among regions"
+  )
+# herbivore grazing pressure----
+
+herb_bite_positive <- bite_by_quadrat %>%
+  filter(n_events > 0)
+
+bite_by_quadrat_region <- herb_bite_positive %>%
   select(Region, total_bite_rate, event_rate, mean_bites_per_event) %>%
   pivot_longer(
     cols = c(total_bite_rate, event_rate, mean_bites_per_event),
@@ -280,7 +344,13 @@ herb_grazing_pressure
 
 kruskal.test(total_bite_rate ~ Region, data = bite_by_quadrat)
 kruskal.test(event_rate ~ Region, data = bite_by_quadrat)
-kruskal.test(mean_bites_per_event ~ Region, data = bite_by_quadrat)
+kruskal.test(mean_bites_per_event ~ Region, data = herb_bite_positive)
+
+pairwise.wilcox.test(
+  bite_by_quadrat$total_bite_rate,
+  bite_by_quadrat$Region,
+  p.adjust.method = "BH"
+)
 
 pairwise.wilcox.test(
   bite_by_quadrat$event_rate,
@@ -288,23 +358,21 @@ pairwise.wilcox.test(
   p.adjust.method = "BH"
 )
 
-# 檢查 total bite rate 是由哪個 component 驅動
-cor.test(bite_by_quadrat$total_bite_rate,
-         bite_by_quadrat$event_rate,
-         method = "spearman")
-
-cor.test(bite_by_quadrat$total_bite_rate,
-         bite_by_quadrat$mean_bites_per_event,
-         method = "spearman")
-
 # Bite rate considered of organic/inorganic percentage----
 
 # 整理 IO data
+
+IO <- IO %>%
+  rename(sediment_id = sediment)
+
 IO_quadrat <- IO %>%
-  mutate(Camera = gsub("S", "C", sediment)) %>%
+  mutate(Camera = gsub("S", "C", sediment_id)) %>%
   select(Region, site, Camera, org_pct, inorg_pct, salt_pct)
 
 bite_by_quadrat <- bite_by_quadrat %>% 
+  left_join(IO_quadrat, by = c("Region", "site", "Camera"))
+
+herb_bite_positive <- herb_bite_positive %>%
   left_join(IO_quadrat, by = c("Region", "site", "Camera"))
 
 #check the relationship between org and total bite rate/event rate/bite per event
@@ -314,8 +382,8 @@ cor.test(bite_by_quadrat$total_bite_rate,
 cor.test(bite_by_quadrat$event_rate,
          bite_by_quadrat$org_pct,
          method = "spearman")
-cor.test(bite_by_quadrat$mean_bites_per_event,
-         bite_by_quadrat$org_pct,
+cor.test(herb_bite_positive$mean_bites_per_event,
+         herb_bite_positive$org_pct,
          method = "spearman")
 
 IO_site <- IO %>%
@@ -370,11 +438,17 @@ IO_pct
 
 #Bite rate consider bulk_P and algae_P----
 
+P <- P %>%
+  rename(sediment_id = sediment)
+
 P_data <- P %>%
-  mutate(Camera = gsub("S", "C", sediment)) %>%
+  mutate(Camera = gsub("S", "C", sediment_id)) %>%
   select(Region, site, Camera, bulk_P_cmgg, algae_P_cmgg)
 
 bite_by_quadrat <- bite_by_quadrat %>%
+  left_join(P_data, by = c("Region", "site", "Camera"))
+
+herb_bite_positive <- herb_bite_positive %>%
   left_join(P_data, by = c("Region", "site", "Camera"))
 
 cor.test(bite_by_quadrat$total_bite_rate,
@@ -383,18 +457,24 @@ cor.test(bite_by_quadrat$total_bite_rate,
 cor.test(bite_by_quadrat$event_rate,
          bite_by_quadrat$algae_P_cmgg,
          method = "spearman")
-cor.test(bite_by_quadrat$mean_bites_per_event,
-         bite_by_quadrat$algae_P_cmgg,
+cor.test(herb_bite_positive$mean_bites_per_event,
+         herb_bite_positive$algae_P_cmgg,
          method = "spearman")
 
 #Modeling----
-lmer(total_bite_rate ~ org_pct + (1|site), data=bite_by_quadrat)
-lmer(event_rate ~ org_pct + (1|site), data=bite_by_quadrat)
-lmer(mean_bites_per_event ~ org_pct + (1|site), data=bite_by_quadrat)
+total_bite_rate_org_lmer <- 
+  lmer(total_bite_rate ~ org_pct + (1|site), data = bite_by_quadrat)
+event_rate_org_lmer <- 
+  lmer(event_rate ~ org_pct + (1|site), data = bite_by_quadrat)
+bite_per_event_org_lmer <- 
+  lmer(mean_bites_per_event ~ org_pct + (1|site), data = herb_bite_positive)
 
-lmer(total_bite_rate ~ algae_P_cmgg + (1|site), data=bite_by_quadrat)
-lmer(event_rate ~ algae_P_cmgg + (1|site), data=bite_by_quadrat)
-lmer(mean_bites_per_event ~ algae_P_cmgg + (1|site), data=bite_by_quadrat)
+total_bite_rate_P_lmer <- 
+  lmer(total_bite_rate ~ algae_P_cmgg + (1|site), data = bite_by_quadrat)
+event_rate_P_lmer <- 
+  lmer(event_rate ~ algae_P_cmgg + (1|site), data = bite_by_quadrat)
+bite_per_event_P_lmer <- 
+  lmer(mean_bites_per_event ~ algae_P_cmgg + (1|site), data = herb_bite_positive)
 
 #plot
 bite_by_quadrat_env <- bite_by_quadrat %>%
@@ -453,35 +533,122 @@ grazing_org_P <-
   )
 grazing_org_P
 
-#sea urchin----
+#bite rate per P/org----
 
-XLQ_ur <- read_excel("urchin density.xlsx", sheet = "XLQ") %>% 
-  mutate(Region = "XLQ")
-GI_ur <- read_excel("urchin density.xlsx", sheet = "GI") %>%
-  mutate(Region = "GI")
-NE_ur <- read_excel("urchin density.xlsx", sheet = "NE") %>%
-  mutate(Region = "NE")
-
-urchin_all <- bind_rows(XLQ_ur, GI_ur, NE_ur)
-
-herb_urchin <- urchin_all %>%
-  filter(Genus %in% c("Diadema", "Echinothrix", "Stomopneustes"))
-
-herb_urchin_region <- herb_urchin %>%
-  group_by(Region, Genus) %>%
-  summarise(Total = n(), .groups = "drop")
-
-urchin_color <- c(
-  "Diadema" = "#6BAED6",
-  "Echinothrix" = "#8FCB9B",
-  "Stomopneustes" = "#6C6F9A"
+#check P and organic correlation
+cor.test(
+  ~ algae_P_cmgg + org_pct,
+  data = bite_by_quadrat,
+  method = "spearman"
 )
 
-herb_urchin_sum_region <- 
-  ggplot(herb_urchin_region, aes(Region, Total, fill = Genus)) +
-  geom_col() +
-  scale_fill_manual(values = urchin_color, drop = F) +
-  theme_bw() +
-  labs(x = "Region", y = "Total number of urchins", fill = "Genus")
-herb_urchin_sum_region
+algal_P_org <- 
+  ggplot(bite_by_quadrat, aes(algae_P_cmgg, org_pct, colour = Region)) +
+  geom_point() +
+  scale_colour_manual(values = region_color) +
+  geom_smooth(method = "lm", se = F) +
+  labs(
+    x = "Algal phosphorous (mg/g)",
+    y = "Organic matter (%)",
+    title = "Relationship between algal P and organic matter"
+  ) +
+  theme_bw()
+algal_P_org
 
+bite_by_quadrat <- bite_by_quadrat %>%
+  mutate(
+    Region = factor(Region, levels = c("GI", "NE", "XLQ")),
+    site = factor(site)
+  )
+
+# Region-only models
+m_total_region <- lmer(total_bite_rate ~ Region + (1 | site), data = bite_by_quadrat)
+m_event_region <- lmer(event_rate ~ Region + (1 | site), data = bite_by_quadrat)
+m_bite_region  <- lmer(mean_bites_per_event ~ Region + (1 | site), data = herb_bite_positive)
+
+summary(m_total_region)
+anova(m_total_region)
+
+summary(m_event_region)
+anova(m_event_region)
+
+summary(m_bite_region)
+anova(m_bite_region)
+
+# Region + algal P models
+m_total_Padj <- lmer(total_bite_rate ~ Region + algae_P_cmgg + (1 | site), 
+                     data = bite_by_quadrat)
+
+m_event_Padj <- lmer(event_rate ~ Region + algae_P_cmgg + (1 | site), 
+                     data = bite_by_quadrat)
+
+m_bite_Padj <- lmer(mean_bites_per_event ~ Region + algae_P_cmgg + (1 | site), 
+                    data = herb_bite_positive)
+
+summary(m_total_Padj)
+anova(m_total_Padj)
+
+summary(m_event_Padj)
+anova(m_event_Padj)
+
+summary(m_bite_Padj)
+anova(m_bite_Padj)
+
+emm_total_Padj <- emmeans(m_total_Padj, ~ Region)
+emm_event_Padj <- emmeans(m_event_Padj, ~ Region)
+emm_bite_Padj  <- emmeans(m_bite_Padj, ~ Region)
+
+emm_total_Padj
+pairs(emm_total_Padj)
+
+emm_event_Padj
+pairs(emm_event_Padj)
+
+emm_bite_Padj
+pairs(emm_bite_Padj)
+
+emm_total_df <- as.data.frame(emm_total_Padj) %>%
+  mutate(metric = "Total bite rate\n(bites/hr)")
+
+emm_event_df <- as.data.frame(emm_event_Padj) %>%
+  mutate(metric = "Feeding event rate\n(events/hr)")
+
+emm_bite_df <- as.data.frame(emm_bite_Padj) %>%
+  mutate(metric = "Bites per event\n(bites/event)")
+
+emm_all <- bind_rows(emm_total_df, emm_event_df, emm_bite_df)
+
+grazing_P_adjusted <- 
+  ggplot(emm_all, aes(x = Region, y = emmean, colour = Region)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.15, linewidth = 0.7) +
+  facet_wrap(~ metric, scales = "free_y", nrow = 1) +
+  scale_colour_manual(values = region_color) +
+  theme_bw() +
+  guides(colour = "none") +
+  labs(
+    title = "Herbivore Grazing Pressure adjusted for algal P",
+    x = "Region",
+    y = "Estimated marginal mean"
+  )
+grazing_P_adjusted
+
+#testing P influence on bite regardless of region----
+
+m_total_P <- lmer(total_bite_rate ~ algae_P_cmgg + (1 | site), 
+                     data = bite_by_quadrat)
+
+m_event_P <- lmer(event_rate ~ algae_P_cmgg + (1 | site), 
+                     data = bite_by_quadrat)
+
+m_bite_P <- lmer(mean_bites_per_event ~ algae_P_cmgg + (1 | site), 
+                    data = herb_bite_positive)
+
+summary(m_total_P)
+anova(m_total_P)
+
+summary(m_event_P)
+anova(m_event_P)
+
+summary(m_bite_P)
+anova(m_bite_P)
