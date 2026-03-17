@@ -6,6 +6,7 @@ library(lmerTest)
 library(emmeans)
 library(patchwork)
 library(performance)
+library(glmmTMB)
 
 sediment <- read_excel("CNP_data.xlsx", sheet = "sediment", na = "NA")
 P <- read_excel("CNP_data.xlsx", sheet = "P", na = "NA")
@@ -256,19 +257,17 @@ herb_func_region
 
 # Bite rate by event----
 
-all_camera <- expand.grid(
-  Region = unique(bite$Region),
-  site = unique(bite$site),
-  Camera = c("C1", "C2", "C3")
-)
+all_camera <- bite %>%
+  distinct(Region, site) %>%
+  tidyr::crossing(Camera = c("C1", "C2", "C3"))
 
 bite_by_quadrat <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
   group_by(Region, site, Camera) %>%
   summarise(
     total_bites = sum(bites, na.rm = T),
-    n_events = n(),
-    mean_bites_per_event = mean(bites, na.rm = T),
+    n_events = sum(bites > 0, na.rm = T),
+    mean_bites_per_event = ifelse(n_events > 0, total_bites / n_events, NA_real_),
     .groups = "drop"
   ) 
 
@@ -307,27 +306,24 @@ ggplot(camera_zero_summary, aes(x = Region, y = prop_with_herbivore, fill = Regi
     y = "Proportion of cameras with herbivore feeding",
     title = "Occurrence of herbivore feeding among regions"
   )
+
 # herbivore grazing pressure----
 
-herb_bite_positive <- bite_by_quadrat %>%
-  filter(n_events > 0)
-
-bite_by_quadrat_region <- herb_bite_positive %>%
-  select(Region, total_bite_rate, event_rate, mean_bites_per_event) %>%
+bite_herb_all <- bite_by_quadrat %>%
+  select(Region, total_bite_rate, event_rate) %>%
   pivot_longer(
-    cols = c(total_bite_rate, event_rate, mean_bites_per_event),
+    cols = c(total_bite_rate, event_rate),
     names_to = "metric",
     values_to = "value"
   ) %>%
   mutate(metric = factor(
-    metric, levels = c("total_bite_rate","event_rate","mean_bites_per_event"), 
+    metric, levels = c("total_bite_rate","event_rate"), 
     labels = c("Total bite rate\n(bites/hr)",
-               "Feeding event rate\n(events/hr)",
-               "Bites per event\n(bites/event)")
+               "Feeding event rate\n(events/hr)")
   ))
 
 herb_grazing_pressure <- 
-  ggplot(bite_by_quadrat_region, aes(Region, value, fill = Region)) +
+  ggplot(bite_herb_all, aes(Region, value, fill = Region)) +
   geom_boxplot(outlier.shape = NA) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
@@ -341,6 +337,36 @@ herb_grazing_pressure <-
     y = NULL
   )
 herb_grazing_pressure
+
+herb_bite_positive <- bite_by_quadrat %>%
+  filter(n_events > 0)
+
+bites_per_event <- herb_bite_positive %>%
+  select(Region, mean_bites_per_event) %>%
+  pivot_longer(
+    cols = c(mean_bites_per_event),
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(metric = factor(
+    metric, levels = c("mean_bites_per_event"), 
+    labels = c("Bites per event\n(bites/event)")
+  ))
+
+bites_per_event_plot <- 
+  ggplot(bites_per_event, aes(Region, value, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", color = "red") +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(
+    title = "Bites per event",
+    x = "Region",
+    y = NULL
+  )
+bites_per_event_plot
 
 kruskal.test(total_bite_rate ~ Region, data = bite_by_quadrat)
 kruskal.test(event_rate ~ Region, data = bite_by_quadrat)
@@ -461,77 +487,40 @@ cor.test(herb_bite_positive$mean_bites_per_event,
          herb_bite_positive$algae_P_cmgg,
          method = "spearman")
 
-#Modeling----
-total_bite_rate_org_lmer <- 
-  lmer(total_bite_rate ~ org_pct + (1|site), data = bite_by_quadrat)
-event_rate_org_lmer <- 
-  lmer(event_rate ~ org_pct + (1|site), data = bite_by_quadrat)
-bite_per_event_org_lmer <- 
-  lmer(mean_bites_per_event ~ org_pct + (1|site), data = herb_bite_positive)
+# Modeling----
+total_bite_org_model <- glmmTMB(
+  total_bites ~ org_pct + (1 | site),
+  family = nbinom2,
+  data = bite_by_quadrat
+)
 
-total_bite_rate_P_lmer <- 
-  lmer(total_bite_rate ~ algae_P_cmgg + (1|site), data = bite_by_quadrat)
-event_rate_P_lmer <- 
-  lmer(event_rate ~ algae_P_cmgg + (1|site), data = bite_by_quadrat)
-bite_per_event_P_lmer <- 
-  lmer(mean_bites_per_event ~ algae_P_cmgg + (1|site), data = herb_bite_positive)
+event_org_model <- glmmTMB(
+  n_events ~ org_pct + (1 | site),
+  family = nbinom2,
+  data = bite_by_quadrat
+)
 
-#plot
-bite_by_quadrat_env <- bite_by_quadrat %>%
-  pivot_longer(
-    cols = c(total_bite_rate, event_rate, mean_bites_per_event),
-    names_to = "response",
-    values_to = "response_value"
-  ) %>%
-  pivot_longer(
-    cols = c(org_pct, algae_P_cmgg),
-    names_to = "predictor",
-    values_to = "predictor_value"
-  ) %>%
-  mutate(
-    response = factor(
-      response,
-      levels = c("total_bite_rate", "event_rate", "mean_bites_per_event"),
-      labels = c("Total bite rate", "Event rate", "Bites per event")
-    ),
-    predictor = factor(
-      predictor,
-      levels = c("algae_P_cmgg", "org_pct"),
-      labels = c("Algal phosphorus (mg/g)", "Organic matter (%)")
-    )
-  )
+bite_per_event_org_lmer <- lmer(
+  mean_bites_per_event ~ org_pct + (1 | site),
+  data = herb_bite_positive
+)
 
-grazing_org_P_label <- bite_by_quadrat_env %>%
-  group_by(response, predictor) %>%
-  summarise(
-    rho = cor(predictor_value, response_value,
-              method = "spearman", use = "complete.obs"),
-    p = cor.test(predictor_value, response_value,
-                 method = "spearman")$p.value,
-    .groups = "drop"
-  ) %>%
-  mutate(label = paste0("ρ = ", round(rho, 2),
-                        "\np = ", signif(p, 2)))
-  
-grazing_org_P <- 
-  ggplot(bite_by_quadrat_env, aes(predictor_value, response_value)) +
-  geom_point(alpha = 0.8) +
-  geom_smooth(method = "lm", linewidth = 0.8) +
-  geom_text(
-    data = grazing_org_P_label,
-    aes(label = label),
-    x = Inf,
-    y = Inf,
-    hjust = 1.1,
-    vjust = 1.1
-  ) +
-  facet_grid(response ~ predictor, scales = "free") +
-  labs(
-    x = NULL,
-    y = NULL,
-    title = "Relationship between environmental variables and herbivore grazing"
-  )
-grazing_org_P
+total_bite_P_model <- glmmTMB(
+  total_bites ~ algae_P_cmgg + (1 | site),
+  family = nbinom2,
+  data = bite_by_quadrat
+)
+
+event_P_model <- glmmTMB(
+  n_events ~ algae_P_cmgg + (1 | site),
+  family = nbinom2,
+  data = bite_by_quadrat
+)
+
+bite_per_event_P_lmer <- lmer(
+  mean_bites_per_event ~ algae_P_cmgg + (1 | site),
+  data = herb_bite_positive
+)
 
 #bite rate per P/org----
 
@@ -561,41 +550,63 @@ bite_by_quadrat <- bite_by_quadrat %>%
     site = factor(site)
   )
 
+herb_bite_positive <- herb_bite_positive %>%
+  mutate(
+    Region = factor(Region, levels = c("GI", "NE", "XLQ")),
+    site = factor(site)
+  )
+
 # Region-only models
-m_total_region <- lmer(total_bite_rate ~ Region + (1 | site), data = bite_by_quadrat)
-m_event_region <- lmer(event_rate ~ Region + (1 | site), data = bite_by_quadrat)
-m_bite_region  <- lmer(mean_bites_per_event ~ Region + (1 | site), data = herb_bite_positive)
+
+m_total_region <- glmmTMB(
+  total_bites ~ Region + (1 | site),
+  family = nbinom2,
+  data = bite_by_quadrat
+)
+
+m_event_region <- glmmTMB(
+  n_events ~ Region + (1 | site),
+  family = nbinom2,
+  data = bite_by_quadrat
+)
+
+m_bite_region <- lmer(
+  mean_bites_per_event ~ Region + (1 | site),
+  data = herb_bite_positive
+)
 
 summary(m_total_region)
-anova(m_total_region)
 
 summary(m_event_region)
-anova(m_event_region)
 
 summary(m_bite_region)
-anova(m_bite_region)
 
 # Region + algal P models
-m_total_Padj <- lmer(total_bite_rate ~ Region + algae_P_cmgg + (1 | site), 
-                     data = bite_by_quadrat)
+m_total_Padj <- glmmTMB(
+  total_bites ~ Region + algae_P_cmgg + (1 | site),
+  family = nbinom2,
+  data = bite_by_quadrat
+)
 
-m_event_Padj <- lmer(event_rate ~ Region + algae_P_cmgg + (1 | site), 
-                     data = bite_by_quadrat)
+m_event_Padj <- glmmTMB(
+  n_events ~ Region + algae_P_cmgg + (1 | site),
+  family = nbinom2,
+  data = bite_by_quadrat
+)
 
-m_bite_Padj <- lmer(mean_bites_per_event ~ Region + algae_P_cmgg + (1 | site), 
-                    data = herb_bite_positive)
+m_bite_Padj <- lmer(
+  mean_bites_per_event ~ Region + algae_P_cmgg + (1 | site),
+  data = herb_bite_positive
+)
 
 summary(m_total_Padj)
-anova(m_total_Padj)
 
 summary(m_event_Padj)
-anova(m_event_Padj)
 
 summary(m_bite_Padj)
-anova(m_bite_Padj)
 
-emm_total_Padj <- emmeans(m_total_Padj, ~ Region)
-emm_event_Padj <- emmeans(m_event_Padj, ~ Region)
+emm_total_Padj <- emmeans(m_total_Padj, ~ Region,  type = "response")
+emm_event_Padj <- emmeans(m_event_Padj, ~ Region, type = "response")
 emm_bite_Padj  <- emmeans(m_bite_Padj, ~ Region)
 
 emm_total_Padj
@@ -608,20 +619,44 @@ emm_bite_Padj
 pairs(emm_bite_Padj)
 
 emm_total_df <- as.data.frame(emm_total_Padj) %>%
-  mutate(metric = "Total bite rate\n(bites/hr)")
+  mutate(
+    estimate = response * 60 / duration,
+    lower = asymp.LCL * 60 / duration,
+    upper = asymp.UCL * 60 / duration,
+    metric = "Total bite rate\n(bites/hr)"
+  )
 
 emm_event_df <- as.data.frame(emm_event_Padj) %>%
-  mutate(metric = "Feeding event rate\n(events/hr)")
+  mutate(
+    estimate = response * 60 / duration,
+    lower = asymp.LCL * 60 / duration,
+    upper = asymp.UCL * 60 / duration,
+    metric = "Feeding event rate\n(events/hr)"
+  )
 
 emm_bite_df <- as.data.frame(emm_bite_Padj) %>%
-  mutate(metric = "Bites per event\n(bites/event)")
+  mutate(
+    estimate = emmean,
+    lower = lower.CL,
+    upper = upper.CL,
+    metric = "Bites per event\n(bites/event)"
+  )
 
-emm_all <- bind_rows(emm_total_df, emm_event_df, emm_bite_df)
+emm_all <- bind_rows(emm_total_df, emm_event_df, emm_bite_df)%>%
+  mutate(
+    metric = factor(
+      metric, 
+      levels = c("Total bite rate\n(bites/hr)", 
+                 "Feeding event rate\n(events/hr)", 
+                 "Bites per event\n(bites/event)"
+      )
+    )
+  )
 
 grazing_P_adjusted <- 
-  ggplot(emm_all, aes(x = Region, y = emmean, colour = Region)) +
+  ggplot(emm_all, aes(x = Region, y = estimate, colour = Region)) +
   geom_point(size = 3) +
-  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.15, linewidth = 0.7) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15, linewidth = 0.7) +
   facet_wrap(~ metric, scales = "free_y", nrow = 1) +
   scale_colour_manual(values = region_color) +
   theme_bw() +
@@ -629,26 +664,31 @@ grazing_P_adjusted <-
   labs(
     title = "Herbivore Grazing Pressure adjusted for algal P",
     x = "Region",
-    y = "Estimated marginal mean"
+    y = NULL
   )
 grazing_P_adjusted
 
-#testing P influence on bite regardless of region----
+# testing P influence on bite regardless of region----
 
-m_total_P <- lmer(total_bite_rate ~ algae_P_cmgg + (1 | site), 
-                     data = bite_by_quadrat)
+m_total_P <- glmmTMB(
+  total_bites ~ algae_P_cmgg + (1 | site),
+  family = nbinom2,
+  data = bite_by_quadrat
+)
 
-m_event_P <- lmer(event_rate ~ algae_P_cmgg + (1 | site), 
-                     data = bite_by_quadrat)
+m_event_P <- glmmTMB(
+  n_events ~ algae_P_cmgg + (1 | site),
+  family = nbinom2,
+  data = bite_by_quadrat
+)
 
-m_bite_P <- lmer(mean_bites_per_event ~ algae_P_cmgg + (1 | site), 
-                    data = herb_bite_positive)
+m_bite_P <- lmer(
+  mean_bites_per_event ~ algae_P_cmgg + (1 | site),
+  data = herb_bite_positive
+)
 
 summary(m_total_P)
-anova(m_total_P)
 
 summary(m_event_P)
-anova(m_event_P)
 
 summary(m_bite_P)
-anova(m_bite_P)
