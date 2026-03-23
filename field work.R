@@ -124,7 +124,6 @@ herb_urchin_sum_region <-
 herb_urchin_sum_region
 
 # Relationship between P concentration & Region----
-
 P_site_mean <- P %>% 
   group_by(Region, site) %>%
   summarise(
@@ -203,7 +202,7 @@ trophic_region <-
   ggplot(bite_quad_trophic, 
          aes(`trophic group`, bite_rate, fill = `trophic group`)) +
   geom_boxplot(outlier.shape = NA) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  geom_jitter(width = 0.15, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
   facet_wrap(~ Region, nrow = 1) +
   scale_fill_manual(values = trophic_color, drop = F) +
@@ -255,7 +254,7 @@ herb_func_region <-
   )
 herb_func_region
 
-# Bite rate by event----
+# Bite rate by quadrat----
 
 all_camera <- bite %>%
   distinct(Region, site) %>%
@@ -317,7 +316,7 @@ bite_herb_all <- bite_by_quadrat %>%
     values_to = "value"
   ) %>%
   mutate(metric = factor(
-    metric, levels = c("total_bite_rate","event_rate"), 
+    metric, levels = c("total_bite_rate", "event_rate"), 
     labels = c("Total bite rate\n(bites/hr)",
                "Feeding event rate\n(events/hr)")
   ))
@@ -355,9 +354,9 @@ bites_per_event <- herb_bite_positive %>%
 
 bites_per_event_plot <- 
   ggplot(bites_per_event, aes(Region, value, fill = Region)) +
-  geom_boxplot(outlier.shape = NA) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
+  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.12) +
   scale_fill_manual(values = region_color) +
   guides(fill = "none") +
   theme_bw() +
@@ -398,16 +397,6 @@ summary(bite_per_event_region)
 
 IO <- IO %>%
   rename(sediment_id = sediment)
-
-IO_quadrat <- IO %>%
-  mutate(Camera = gsub("S", "C", sediment_id)) %>%
-  select(Region, site, Camera, org_pct, inorg_pct, salt_pct)
-
-bite_by_quadrat <- bite_by_quadrat %>% 
-  left_join(IO_quadrat, by = c("Region", "site", "Camera"))
-
-herb_bite_positive <- herb_bite_positive %>%
-  left_join(IO_quadrat, by = c("Region", "site", "Camera"))
 
 IO_site <- IO %>%
   group_by(Region, site) %>%
@@ -459,7 +448,16 @@ IO_pct <-
   )
 IO_pct  
 
-# Modeling----
+# event rate and bite per event adjusted for nutrient----
+IO_quadrat <- IO %>%
+  mutate(Camera = gsub("S", "C", sediment_id)) %>%
+  select(Region, site, Camera, org_pct, inorg_pct, salt_pct, org_g, inorg_g, salt_g)
+
+bite_by_quadrat <- bite_by_quadrat %>% 
+  left_join(IO_quadrat, by = c("Region", "site", "Camera"))
+
+herb_bite_positive <- herb_bite_positive %>%
+  left_join(IO_quadrat, by = c("Region", "site", "Camera"))
 
 P <- P %>%
   rename(sediment_id = sediment)
@@ -469,10 +467,76 @@ P_data <- P %>%
   select(Region, site, Camera, bulk_P_cmgg, algae_P_cmgg)
 
 bite_by_quadrat <- bite_by_quadrat %>%
-  left_join(P_data, by = c("Region", "site", "Camera"))
+  left_join(P_data, by = c("Region", "site", "Camera")) %>%
+  mutate(
+    event_rate_org_adj = event_rate / org_g,
+    event_rate_P_adj = event_rate / algae_P_cmgg
+  )
 
 herb_bite_positive <- herb_bite_positive %>%
-  left_join(P_data, by = c("Region", "site", "Camera"))
+  left_join(P_data, by = c("Region", "site", "Camera")) %>%
+  mutate(
+    bites_per_event_org_adj = mean_bites_per_event / org_g,
+    bites_per_event_P_adj = mean_bites_per_event / algae_P_cmgg
+  )
+
+event_rate_adj <- bite_by_quadrat %>%
+  select(Region, event_rate_org_adj, event_rate_P_adj) %>%
+  pivot_longer(
+    cols = c(event_rate_org_adj, event_rate_P_adj),
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(metric = factor(
+    metric, levels = c("event_rate_org_adj", "event_rate_P_adj"),
+    labels = c("Feeding event rate adjusted for organic matter",
+               "Feeding event rate adjusted for algal P")
+  ))
+
+event_rate_adj_plot <- 
+  ggplot(event_rate_adj, aes(Region, value, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", color = "red") +
+  scale_fill_manual(values = region_color) +
+  facet_wrap(~metric, scales = "free_y", nrow = 1) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(
+    title = "Feeding event rate adjusted for nutrient content",
+    x = "Region",
+    y = NULL
+  )
+event_rate_adj_plot
+
+bite_per_event_adj <- herb_bite_positive %>%
+  select(Region, bites_per_event_org_adj, bites_per_event_P_adj) %>%
+  pivot_longer(
+    cols = c(bites_per_event_org_adj, bites_per_event_P_adj),
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(metric = factor(
+    metric, levels = c("bites_per_event_org_adj", "bites_per_event_P_adj"),
+    labels = c("Bites per event adjusted for organic matter",
+               "Bites per event adjusted for algal P")
+  ))
+
+bite_per_event_adj_plot <- 
+  ggplot(bite_per_event_adj, aes(Region, value, fill = Region)) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", color = "red") +
+  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.12) +
+  scale_fill_manual(values = region_color) +
+  facet_wrap(~metric, scales = "free_y", nrow = 1) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(
+    title = "Bites per event adjusted for nutrient content",
+    x = "Region",
+    y = NULL
+  )
+bite_per_event_adj_plot
 
 #bite rate per P/org----
 
