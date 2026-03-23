@@ -538,6 +538,19 @@ bite_per_event_adj_plot <-
   )
 bite_per_event_adj_plot
 
+bites_per_event_org_adj_lm <- lmer(
+  bites_per_event_org_adj ~ Region + (1| site),
+  data = herb_bite_positive
+)
+
+bites_per_event_P_adj_lm <- lmer(
+  bites_per_event_P_adj ~ Region + (1| site),
+  data = herb_bite_positive
+)
+
+summary(bites_per_event_org_adj_lm)
+summary(bites_per_event_P_adj_lm)
+
 #bite rate per P/org----
 
 bite_by_quadrat <- bite_by_quadrat %>%
@@ -795,3 +808,61 @@ grazing_P_adjusted <-
     y = NULL
   )
 grazing_P_adjusted
+
+# try testing with presence----
+bite_by_quadrat <- bite_by_quadrat %>%
+  mutate(has_herbivore = ifelse(n_events > 0, 1, 0))
+
+m_presence_org <- glmer(
+  has_herbivore ~ Region + org_pct + (1 | site),
+  data = bite_by_quadrat,
+  family = binomial
+)
+
+summary(m_presence_org)
+anova(m_presence_org)
+
+m_presence_P <- glmer(
+  has_herbivore ~ Region + algae_P_cmgg + (1 | site),
+  data = bite_by_quadrat,
+  family = binomial
+)
+
+summary(m_presence_P)
+anova(m_presence_P)
+
+emm_presence_org <- emmeans(m_presence_org, ~ Region, type = "response")
+emm_presence_org
+pairs(emm_presence_org)
+
+emm_presence_P <- emmeans(m_presence_P, ~ Region, type = "response")
+emm_presence_P
+pairs(emm_presence_P)
+
+emm_presence_org_df <- as.data.frame(emm_presence_org)
+
+ggplot(emm_presence_org_df, aes(x = Region, y = prob, colour = Region)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.15) +
+  scale_colour_manual(values = region_color) +
+  guides(colour = "none") +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = "Predicted probability of herbivore presence",
+    title = "Herbivore presence adjusted for organic matter"
+  )
+
+emm_presence_P_df <- as.data.frame(emm_presence_P)
+
+ggplot(emm_presence_P_df, aes(x = Region, y = prob, colour = Region)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.15) +
+  scale_colour_manual(values = region_color) +
+  guides(colour = "none") +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = "Predicted probability of herbivore presence",
+    title = "Herbivore presence adjusted for algal phosphorus"
+  )
