@@ -132,23 +132,32 @@ P_site_mean <- P %>%
     .groups = "drop"
   )
 
-bulk_P_region <- 
-  ggplot(P_site_mean, aes(Region, bulk_P, fill = Region)) +
-  geom_boxplot() +
-  scale_fill_manual(values = region_color) +
-  guides(fill = "none") +
-  geom_jitter() +
-  theme_bw()
-bulk_P_region
+P_site_mean_long <- P_site_mean %>%
+  pivot_longer(
+    cols = c(bulk_P, algae_P),
+    names_to = "P_type",
+    values_to = "P_value"
+  ) %>%
+  mutate(
+    P_type = factor(
+      P_type,
+      levels = c("bulk_P", "algae_P"),
+      labels = c("Bulk P", "Algal P")
+    )
+  )
 
-algae_P_region <- 
-  ggplot(P_site_mean, aes(Region, algae_P, fill = Region)) +
-  geom_boxplot() +
+P_region_facet <- ggplot(P_site_mean_long, aes(x = Region, y = P_value, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, alpha = 0.8) +
   scale_fill_manual(values = region_color) +
   guides(fill = "none") +
-  geom_jitter() +
-  theme_bw()
-algae_P_region
+  facet_wrap(~ P_type, scales = "free_y") +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = "P concentration"
+  )
+P_region_facet
 
 kruskal.test(bulk_P ~ Region, data = P_site_mean)
 pairwise.wilcox.test(
