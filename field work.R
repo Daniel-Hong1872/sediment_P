@@ -102,25 +102,38 @@ NE_ur <- read_excel("urchin density.xlsx", sheet = "NE") %>%
 
 urchin_all <- bind_rows(XLQ_ur, GI_ur, NE_ur)
 
-herb_urchin <- urchin_all %>%
-  filter(Genus %in% c("Diadema", "Echinothrix", "Stomopneustes"))
+urchin_all_region <- urchin_all %>%
+  filter(!is.na(Genus)) %>%
+  group_by(Region, Genus) %>%
+  summarise(Total = n(), .groups = "drop")
 
-herb_urchin_region <- herb_urchin %>%
+herb_urchin_region <- urchin_all %>%
+  filter(Genus %in% c("Diadema", "Echinothrix", "Stomopneustes")) %>%
   group_by(Region, Genus) %>%
   summarise(Total = n(), .groups = "drop")
 
 urchin_color <- c(
   "Diadema" = "#6BAED6",
   "Echinothrix" = "#8FCB9B",
-  "Stomopneustes" = "#6C6F9A"
+  "Stomopneustes" = "#6C6F9A",
+  "Echinometra" = "#F2A541",
+  "Echinostrephus" = "#C97B84"
 )
+
+urchin_all_sum_region <- 
+  ggplot(urchin_all_region, aes(Region, Total, fill = Genus)) +
+  geom_col() +
+  scale_fill_manual(values = urchin_color, drop = F) +
+  theme_bw() +
+  labs(x = "Region", y = "Total number of sea urchins", fill = "Genus")
+urchin_all_sum_region
 
 herb_urchin_sum_region <- 
   ggplot(herb_urchin_region, aes(Region, Total, fill = Genus)) +
   geom_col() +
   scale_fill_manual(values = urchin_color, drop = F) +
   theme_bw() +
-  labs(x = "Region", y = "Total number of urchins", fill = "Genus")
+  labs(x = "Region", y = "Total number of grazing sea urchins", fill = "Genus")
 herb_urchin_sum_region
 
 # Relationship between P concentration & Region----
@@ -180,6 +193,25 @@ cor.test(P_site_mean$bulk_P,
 # Fish bite----
 
 bite <- read_excel("Fish bite_data.xlsx")
+
+species_list <- bite %>%
+  filter(!is.na(Species)) %>%
+  distinct(Species) %>%
+  arrange(Species)
+
+herbivore_groups <- c(
+  "grazers (croppers)",
+  "farmers (territorial croppers)",
+  "scrapers",
+  "browsers",
+  "small excavators"
+)
+
+herbivore_list <- bite %>%
+  filter(`herbivore functional group` %in% herbivore_groups) %>%
+  filter(!is.na(Species)) %>%
+  distinct(Species) %>%
+  arrange(Species)
 
 area <- 1
 duration <- 35
