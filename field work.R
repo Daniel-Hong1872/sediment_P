@@ -511,14 +511,14 @@ bite_by_quadrat <- bite_by_quadrat %>%
   left_join(P_data, by = c("Region", "site", "Camera")) %>%
   mutate(
     event_rate_org_adj = event_rate / org_g,
-    event_rate_P_adj = event_rate / algae_P_cmgg
+    event_rate_P_adj = event_rate / bulk_P_cmgg
   )
 
 herb_bite_positive <- herb_bite_positive %>%
   left_join(P_data, by = c("Region", "site", "Camera")) %>%
   mutate(
     bites_per_event_org_adj = mean_bites_per_event / org_g,
-    bites_per_event_P_adj = mean_bites_per_event / algae_P_cmgg
+    bites_per_event_P_adj = mean_bites_per_event / bulk_P_cmgg
   )
 
 event_rate_adj <- bite_by_quadrat %>%
@@ -531,7 +531,7 @@ event_rate_adj <- bite_by_quadrat %>%
   mutate(metric = factor(
     metric, levels = c("event_rate_org_adj", "event_rate_P_adj"),
     labels = c("Feeding event rate adjusted for organic matter",
-               "Feeding event rate adjusted for algal P")
+               "Feeding event rate adjusted for bulk P")
   ))
 
 event_rate_adj_plot <- 
@@ -560,7 +560,7 @@ bite_per_event_adj <- herb_bite_positive %>%
   mutate(metric = factor(
     metric, levels = c("bites_per_event_org_adj", "bites_per_event_P_adj"),
     labels = c("Bites per event adjusted for organic matter",
-               "Bites per event adjusted for algal P")
+               "Bites per event adjusted for bulk P")
   ))
 
 bite_per_event_adj_plot <- 
