@@ -7,6 +7,7 @@ library(emmeans)
 library(patchwork)
 library(performance)
 library(glmmTMB)
+library(DHARMa)
 
 sediment <- read_excel("CNP_data.xlsx", sheet = "sediment", na = "NA")
 P <- read_excel("CNP_data.xlsx", sheet = "P", na = "NA")
@@ -23,7 +24,7 @@ sediment <- sediment %>%
 
 # mg/g = (mg/L * mL / 1000) / (mg / 1000) = mg/L * mL / mg
 V_ml <- 5
-P <- P %>%
+P<- P %>%
   rename(
     A_cmgL = `sample A_P concentration(mg/L)`,
     B_cmgL = `sample B_P concentration(mg/L)`,
@@ -31,8 +32,8 @@ P <- P %>%
     B_wmg = `B subsample_P weight(mg)`
   ) %>%
   mutate(
-    bulk_P_cmgg = (A_cmgL * V_ml / 1000) / A_wmg * 1000,
-    algae_P_cmgg = (B_cmgL * V_ml / 1000)/ B_wmg * 1000
+    bulk_P_mgg = (A_cmgL * V_ml / 1000) / A_wmg * 1000,
+    algae_P_mgg = (B_cmgL * V_ml / 1000)/ B_wmg * 1000
   )
 
 IO <- IO %>%
@@ -140,8 +141,8 @@ herb_urchin_sum_region
 P_site_mean <- P %>% 
   group_by(Region, site) %>%
   summarise(
-    bulk_P = mean(bulk_P_cmgg, na.rm = T),
-    algae_P = mean(algae_P_cmgg, na.rm = T),
+    bulk_P = mean(bulk_P_mgg, na.rm = T),
+    algae_P = mean(algae_P_mgg, na.rm = T),
     .groups = "drop"
   )
 
@@ -150,13 +151,6 @@ P_site_mean_long <- P_site_mean %>%
     cols = c(bulk_P, algae_P),
     names_to = "P_type",
     values_to = "P_value"
-  ) %>%
-  mutate(
-    P_type = factor(
-      P_type,
-      levels = c("bulk_P", "algae_P"),
-      labels = c("Bulk P", "Algal P")
-    )
   )
 
 P_region_facet <- ggplot(P_site_mean_long, aes(x = Region, y = P_value, fill = Region)) +
@@ -168,7 +162,7 @@ P_region_facet <- ggplot(P_site_mean_long, aes(x = Region, y = P_value, fill = R
   theme_bw() +
   labs(
     x = "Region",
-    y = "P concentration"
+    y = "P concentration (mg/g)"
   )
 P_region_facet
 
@@ -421,16 +415,41 @@ event_region <- glmmTMB(
   data = bite_by_quadrat
 )
 
-bite_per_event_region <- lmer(
+check_overdispersion(total_bite_region)
+check_zeroinflation(total_bite_region)
+res_total <- simulateResiduals(total_bite_region)
+plot(res_total)
+testDispersion(res_total)
+testZeroInflation(res_total)
+testOutliers(res_total)
+
+check_overdispersion(event_region)
+check_zeroinflation(event_region)
+res_event <- simulateResiduals(event_region)
+plot(res_event)
+testDispersion(res_event)
+testZeroInflation(res_event)
+testOutliers(res_event)
+
+summary(total_bite_region)
+summary(event_region)
+
+emmeans(total_bite_region, pairwise ~ Region, type = "response")
+emmeans(event_region, pairwise ~ Region, type = "response")
+
+bite_per_event_region <- glmmTMB(
   mean_bites_per_event ~ Region + (1 | site),
+  family = Gamma(link = "log"),
   data = herb_bite_positive
 )
 
-summary(total_bite_region)
-
-summary(event_region)
+sim_res <- simulate_residuals(bite_per_event_region)
+plot(sim_res)
+testDispersion(sim_res)
 
 summary(bite_per_event_region)
+
+emmeans(bite_per_event_region, pairwise ~ Region, type = "response")
 
 # Bite rate considered of organic/inorganic percentage----
 
@@ -489,109 +508,6 @@ IO_pct <-
   )
 IO_pct  
 
-# event rate and bite per event adjusted for nutrient----
-IO_quadrat <- IO %>%
-  mutate(Camera = gsub("S", "C", sediment_id)) %>%
-  select(Region, site, Camera, org_pct, inorg_pct, salt_pct, org_g, inorg_g, salt_g)
-
-bite_by_quadrat <- bite_by_quadrat %>% 
-  left_join(IO_quadrat, by = c("Region", "site", "Camera"))
-
-herb_bite_positive <- herb_bite_positive %>%
-  left_join(IO_quadrat, by = c("Region", "site", "Camera"))
-
-P <- P %>%
-  rename(sediment_id = sediment)
-
-P_data <- P %>%
-  mutate(Camera = gsub("S", "C", sediment_id)) %>%
-  select(Region, site, Camera, bulk_P_cmgg, algae_P_cmgg)
-
-bite_by_quadrat <- bite_by_quadrat %>%
-  left_join(P_data, by = c("Region", "site", "Camera")) %>%
-  mutate(
-    event_rate_org_adj = event_rate / org_g,
-    event_rate_P_adj = event_rate / bulk_P_cmgg
-  )
-
-herb_bite_positive <- herb_bite_positive %>%
-  left_join(P_data, by = c("Region", "site", "Camera")) %>%
-  mutate(
-    bites_per_event_org_adj = mean_bites_per_event / org_g,
-    bites_per_event_P_adj = mean_bites_per_event / bulk_P_cmgg
-  )
-
-event_rate_adj <- bite_by_quadrat %>%
-  select(Region, event_rate_org_adj, event_rate_P_adj) %>%
-  pivot_longer(
-    cols = c(event_rate_org_adj, event_rate_P_adj),
-    names_to = "metric",
-    values_to = "value"
-  ) %>%
-  mutate(metric = factor(
-    metric, levels = c("event_rate_org_adj", "event_rate_P_adj"),
-    labels = c("Feeding event rate adjusted for organic matter",
-               "Feeding event rate adjusted for bulk P")
-  ))
-
-event_rate_adj_plot <- 
-  ggplot(event_rate_adj, aes(Region, value, fill = Region)) +
-  geom_boxplot(outlier.shape = NA) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red") +
-  scale_fill_manual(values = region_color) +
-  facet_wrap(~metric, scales = "free_y", nrow = 1) +
-  guides(fill = "none") +
-  theme_bw() +
-  labs(
-    title = "Feeding event rate adjusted for nutrient content",
-    x = "Region",
-    y = NULL
-  )
-event_rate_adj_plot
-
-bite_per_event_adj <- herb_bite_positive %>%
-  select(Region, bites_per_event_org_adj, bites_per_event_P_adj) %>%
-  pivot_longer(
-    cols = c(bites_per_event_org_adj, bites_per_event_P_adj),
-    names_to = "metric",
-    values_to = "value"
-  ) %>%
-  mutate(metric = factor(
-    metric, levels = c("bites_per_event_org_adj", "bites_per_event_P_adj"),
-    labels = c("Bites per event adjusted for organic matter",
-               "Bites per event adjusted for bulk P")
-  ))
-
-bite_per_event_adj_plot <- 
-  ggplot(bite_per_event_adj, aes(Region, value, fill = Region)) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red") +
-  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.12) +
-  scale_fill_manual(values = region_color) +
-  facet_wrap(~metric, scales = "free_y", nrow = 1) +
-  guides(fill = "none") +
-  theme_bw() +
-  labs(
-    title = "Bites per event adjusted for nutrient content",
-    x = "Region",
-    y = NULL
-  )
-bite_per_event_adj_plot
-
-bites_per_event_org_adj_lm <- lmer(
-  bites_per_event_org_adj ~ Region + (1| site),
-  data = herb_bite_positive
-)
-
-bites_per_event_P_adj_lm <- lmer(
-  bites_per_event_P_adj ~ Region + (1| site),
-  data = herb_bite_positive
-)
-
-summary(bites_per_event_org_adj_lm)
-summary(bites_per_event_P_adj_lm)
-
 #bite rate per P/org----
 
 bite_by_quadrat <- bite_by_quadrat %>%
@@ -608,13 +524,13 @@ herb_bite_positive <- herb_bite_positive %>%
 
 #check P and organic correlation
 cor.test(
-  ~ algae_P_cmgg + org_pct,
+  ~ algae_P_mgg + org_pct,
   data = bite_by_quadrat,
   method = "spearman"
 )
 
 algal_P_org <- 
-  ggplot(bite_by_quadrat, aes(algae_P_cmgg, org_pct, colour = Region)) +
+  ggplot(bite_by_quadrat, aes(algae_P_mgg, org_pct, colour = Region)) +
   geom_point() +
   scale_colour_manual(values = region_color) +
   geom_smooth(method = "lm", se = F) +
@@ -654,19 +570,19 @@ summary(bite_per_event_org)
 # algae P-only models
 
 total_bite_P <- glmmTMB(
-  total_bites ~ algae_P_cmgg + (1 | site),
+  total_bites ~ algae_P_mgg + (1 | site),
   family = nbinom2,
   data = bite_by_quadrat
 )
 
 event_P <- glmmTMB(
-  n_events ~ algae_P_cmgg + (1 | site),
+  n_events ~ algae_P_mgg + (1 | site),
   family = nbinom2,
   data = bite_by_quadrat
 )
 
 bite_per_event_P <- lmer(
-  mean_bites_per_event ~ algae_P_cmgg + (1 | site),
+  mean_bites_per_event ~ algae_P_mgg + (1 | site),
   data = herb_bite_positive
 )
 
@@ -765,19 +681,19 @@ grazing_org_adjusted
 
 # Region + algal P models
 total_Padj <- glmmTMB(
-  total_bites ~ Region + algae_P_cmgg + (1 | site),
+  total_bites ~ Region + algae_P_mgg + (1 | site),
   family = nbinom2,
   data = bite_by_quadrat
 )
 
 event_Padj <- glmmTMB(
-  n_events ~ Region + algae_P_cmgg + (1 | site),
+  n_events ~ Region + algae_P_mgg + (1 | site),
   family = nbinom2,
   data = bite_by_quadrat
 )
 
 bite_Padj <- lmer(
-  mean_bites_per_event ~ Region + algae_P_cmgg + (1 | site),
+  mean_bites_per_event ~ Region + algae_P_mgg + (1 | site),
   data = herb_bite_positive
 )
 
@@ -850,60 +766,255 @@ grazing_P_adjusted <-
   )
 grazing_P_adjusted
 
-# try testing with presence----
-bite_by_quadrat <- bite_by_quadrat %>%
-  mutate(has_herbivore = ifelse(n_events > 0, 1, 0))
+# CNP----
 
-m_presence_org <- glmer(
-  has_herbivore ~ Region + org_pct + (1 | site),
-  data = bite_by_quadrat,
-  family = binomial
-)
+#========================
+# Nutrient concentration across region
+#========================
 
-summary(m_presence_org)
-anova(m_presence_org)
+P_site_mean <- P %>% 
+  group_by(Region, site) %>%
+  summarise(
+    bulk_P = mean(bulk_P_mgg, na.rm = TRUE),
+    algae_P = mean(algae_P_mgg, na.rm = TRUE),
+    .groups = "drop"
+  )
 
-m_presence_P <- glmer(
-  has_herbivore ~ Region + algae_P_cmgg + (1 | site),
-  data = bite_by_quadrat,
-  family = binomial
-)
+CN <- read_excel("CNP_data.xlsx", sheet = "CN", na = "NA")
 
-summary(m_presence_P)
-anova(m_presence_P)
+CN <- CN %>%
+  rename(
+    bulk_mg = `sample_a_weight_mg`,
+    bulk_N_pct = `sample_a_N%`,
+    bulk_C_pct = `sample_a_C%`,
+    algal_mg = `sample_b_weight_mg`,
+    algal_N_pct = `sample_b_N%`,
+    algal_C_pct = `sample_b_C%`,
+  ) %>%
+  mutate(
+    # concentration (mg/g)
+    bulk_N_mgg  = bulk_N_pct * 10,
+    bulk_C_mgg  = bulk_C_pct * 10,
+    algal_N_mgg = algal_N_pct * 10,
+    algal_C_mgg = algal_C_pct * 10,
+    
+    # molar concentration (mmol/g)
+    bulk_C_mmolg  = bulk_C_mgg / 12,
+    bulk_N_mmolg  = bulk_N_mgg / 14,
+    algal_C_mmolg = algal_C_mgg / 12,
+    algal_N_mmolg = algal_N_mgg / 14
+  )
 
-emm_presence_org <- emmeans(m_presence_org, ~ Region, type = "response")
-emm_presence_org
-pairs(emm_presence_org)
+#------------------------
+# Site mean for concentration
+#------------------------
+CN_site_mean <- CN %>% 
+  group_by(Region, site) %>%
+  summarise(
+    bulk_N_mean = mean(bulk_N_mgg, na.rm = TRUE),
+    bulk_C_mean = mean(bulk_C_mgg, na.rm = TRUE),
+    algal_N_mean = mean(algal_N_mgg, na.rm = TRUE),
+    algal_C_mean = mean(algal_C_mgg, na.rm = TRUE),
+    
+    bulk_N_mmolg_mean = mean(bulk_N_mmolg, na.rm = TRUE),
+    bulk_C_mmolg_mean = mean(bulk_C_mmolg, na.rm = TRUE),
+    algal_N_mmolg_mean = mean(algal_N_mmolg, na.rm = TRUE),
+    algal_C_mmolg_mean = mean(algal_C_mmolg, na.rm = TRUE),
+    .groups = "drop"
+  )
 
-emm_presence_P <- emmeans(m_presence_P, ~ Region, type = "response")
-emm_presence_P
-pairs(emm_presence_P)
+CNP_site_mean <- CN_site_mean %>%
+  left_join(P_site_mean, by = c("Region", "site")) %>%
+  rename(
+    bulk_P_mean = bulk_P,
+    algal_P_mean = algae_P
+  ) %>%
+  mutate(
+    # P: mg/g -> mmol/g
+    bulk_P_mmolg_mean = bulk_P_mean / 31,
+    algal_P_mmolg_mean = algal_P_mean / 31
+  )
 
-emm_presence_org_df <- as.data.frame(emm_presence_org)
+#------------------------
+# Concentration long table
+#------------------------
+CNP_site_mean_long <- CNP_site_mean %>%
+  pivot_longer(
+    cols = c(
+      bulk_N_mean, bulk_C_mean,
+      algal_N_mean, algal_C_mean,
+      bulk_P_mean, algal_P_mean
+    ),
+    names_to = "CNP_type",
+    values_to = "CNP_value"
+  )
 
-ggplot(emm_presence_org_df, aes(x = Region, y = prob, colour = Region)) +
-  geom_point(size = 3) +
-  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.15) +
-  scale_colour_manual(values = region_color) +
-  guides(colour = "none") +
+CNP_region_facet <- 
+  ggplot(CNP_site_mean_long, aes(x = Region, y = CNP_value, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, alpha = 0.8) +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
+  facet_wrap(~ CNP_type, scales = "free_y") +
   theme_bw() +
   labs(
     x = "Region",
-    y = "Predicted probability of herbivore presence",
-    title = "Herbivore presence adjusted for organic matter"
+    y = "Nutrient concentration (mg/g)"
+  )
+CNP_region_facet
+
+#========================
+# Molar ratio
+#========================
+
+CNP_molar_ratio <- CNP_site_mean %>%
+  mutate(
+    bulk_CN_ratio  = bulk_C_mmolg_mean  / bulk_N_mmolg_mean,
+    algal_CN_ratio = algal_C_mmolg_mean / algal_N_mmolg_mean,
+    bulk_CP_ratio  = bulk_C_mmolg_mean  / bulk_P_mmolg_mean,
+    algal_CP_ratio = algal_C_mmolg_mean / algal_P_mmolg_mean,
+    bulk_NP_ratio  = bulk_N_mmolg_mean  / bulk_P_mmolg_mean,
+    algal_NP_ratio = algal_N_mmolg_mean / algal_P_mmolg_mean
   )
 
-emm_presence_P_df <- as.data.frame(emm_presence_P)
+CNP_molar_ratio_long <- CNP_molar_ratio %>%
+  pivot_longer(
+    cols = c(
+      bulk_CN_ratio, algal_CN_ratio,
+      bulk_CP_ratio, algal_CP_ratio,
+      bulk_NP_ratio, algal_NP_ratio
+    ),
+    names_to = "CNP_ratio_type",
+    values_to = "CNP_ratio_value"
+  )
 
-ggplot(emm_presence_P_df, aes(x = Region, y = prob, colour = Region)) +
-  geom_point(size = 3) +
-  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.15) +
-  scale_colour_manual(values = region_color) +
-  guides(colour = "none") +
+CNP_ratio_plot <- 
+  ggplot(CNP_molar_ratio_long, aes(x = Region, y = CNP_ratio_value, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, alpha = 0.8) +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
+  facet_wrap(~ CNP_ratio_type, scales = "free_y") +
   theme_bw() +
   labs(
     x = "Region",
-    y = "Predicted probability of herbivore presence",
-    title = "Herbivore presence adjusted for algal phosphorus"
+    y = "Molar ratio"
   )
+CNP_ratio_plot
+
+# bite per event adjust by CNP
+
+#========================
+# Per-sediment data for joining with camera/herbivory data
+#========================
+
+P_join <- P %>%
+  select(Region, site, sediment, bulk_P_mgg, algae_P_mgg)
+
+CN_molar <- CN %>%
+  left_join(P_join, by = c("Region", "site", "sediment")) %>%
+  mutate(
+    Camera = gsub("S", "C", sediment),
+    
+    # P molar concentration
+    bulk_P_mmolg  = bulk_P_mgg / 31,
+    algal_P_mmolg = algae_P_mgg / 31,
+    
+    # molar ratios at sediment / camera level
+    bulk_CN_ratio  = bulk_C_mmolg / bulk_N_mmolg,
+    algal_CN_ratio = algal_C_mmolg / algal_N_mmolg,
+    bulk_CP_ratio  = bulk_C_mmolg / bulk_P_mmolg,
+    algal_CP_ratio = algal_C_mmolg / algal_P_mmolg,
+    bulk_NP_ratio  = bulk_N_mmolg / bulk_P_mmolg,
+    algal_NP_ratio = algal_N_mmolg / algal_P_mmolg
+  ) %>%
+  select(
+    Region, site, sediment, Camera,
+    bulk_C_mmolg, bulk_N_mmolg, bulk_P_mmolg,
+    algal_C_mmolg, algal_N_mmolg, algal_P_mmolg,
+    bulk_CN_ratio, algal_CN_ratio,
+    bulk_CP_ratio, algal_CP_ratio,
+    bulk_NP_ratio, algal_NP_ratio
+  ) 
+
+IO_site_mean <- IO %>%
+  group_by(Region, site) %>%
+  summarise(
+    org_pct_mean   = mean(org_pct, na.rm = TRUE),
+    inorg_pct_mean = mean(inorg_pct, na.rm = TRUE),
+    salt_pct_mean  = mean(salt_pct, na.rm = TRUE),
+    org_g_mean     = mean(org_g, na.rm = TRUE),
+    inorg_g_mean   = mean(inorg_g, na.rm = TRUE),
+    salt_g_mean    = mean(salt_g, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+herb_bite_positive <- herb_bite_positive %>%
+  left_join(IO_site_mean, by = c("Region", "site")) %>%
+  left_join(CNP_site_mean, by = c("Region", "site")) %>%
+  mutate(
+    bites_per_event_org_adj = mean_bites_per_event / org_g_mean,
+    bites_per_event_C_adj   = mean_bites_per_event / bulk_C_mean,
+    bites_per_event_N_adj   = mean_bites_per_event / bulk_N_mean,
+    bites_per_event_P_adj   = mean_bites_per_event / algal_P_mean
+  )
+
+#========================
+# Long format for plotting
+#========================
+
+bite_per_event_adj_2 <- herb_bite_positive %>%
+  select(
+    Region,
+    bites_per_event_org_adj,
+    bites_per_event_C_adj,
+    bites_per_event_N_adj,
+    bites_per_event_P_adj
+  ) %>%
+  pivot_longer(
+    cols = c(
+      bites_per_event_org_adj,
+      bites_per_event_C_adj,
+      bites_per_event_N_adj,
+      bites_per_event_P_adj
+    ),
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(
+    metric = factor(
+      metric,
+      levels = c(
+        "bites_per_event_org_adj",
+        "bites_per_event_C_adj",
+        "bites_per_event_N_adj",
+        "bites_per_event_P_adj"
+      ),
+      labels = c(
+        "adjusted for organic matter",
+        "adjusted for bulk C",
+        "adjusted for bulk N",
+        "adjusted for algal P"
+      )
+    )
+  )
+
+#========================
+# Plot
+#========================
+
+bite_per_event_adj_2_plot <- 
+  ggplot(bite_per_event_adj_2, aes(Region, value, fill = Region)) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", color = "red") +
+  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.12) +
+  scale_fill_manual(values = region_color) +
+  facet_wrap(~metric, scales = "free_y", nrow = 1) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(
+    title = "Bites per event adjusted for nutrient content",
+    x = "Region",
+    y = NULL
+  )
+bite_per_event_adj_2_plot
