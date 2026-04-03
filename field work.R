@@ -114,11 +114,11 @@ herb_urchin_region <- urchin_all %>%
   summarise(Total = n(), .groups = "drop")
 
 urchin_color <- c(
-  "Diadema" = "#6BAED6",
-  "Echinothrix" = "#8FCB9B",
+  "Diadema" = "#F2A541",
+  "Echinothrix" = "#C97B84",
   "Stomopneustes" = "#6C6F9A",
-  "Echinometra" = "#F2A541",
-  "Echinostrephus" = "#C97B84"
+  "Echinometra" = "#8FCB9B",
+  "Echinostrephus" = "#6BAED6"
 )
 
 urchin_all_sum_region <- 
@@ -956,7 +956,7 @@ herb_bite_positive <- herb_bite_positive %>%
     bites_per_event_org_adj = mean_bites_per_event / org_g_mean,
     bites_per_event_C_adj   = mean_bites_per_event / bulk_C_mean,
     bites_per_event_N_adj   = mean_bites_per_event / bulk_N_mean,
-    bites_per_event_P_adj   = mean_bites_per_event / algal_P_mean
+    bites_per_event_P_adj   = mean_bites_per_event / bulk_P_mean
   )
 
 #========================
@@ -991,10 +991,10 @@ bite_per_event_adj_2 <- herb_bite_positive %>%
         "bites_per_event_P_adj"
       ),
       labels = c(
-        "adjusted for organic matter",
-        "adjusted for bulk C",
-        "adjusted for bulk N",
-        "adjusted for algal P"
+        "bite per event\n(adjusted for organic matter)",
+        "bite per event\n(adjusted for bulk C)",
+        "bite per event\n(adjusted for bulk N)",
+        "bite per event\n(adjusted for bulk P)"
       )
     )
   )
@@ -1013,7 +1013,6 @@ bite_per_event_adj_2_plot <-
   guides(fill = "none") +
   theme_bw() +
   labs(
-    title = "Bites per event adjusted for nutrient content",
     x = "Region",
     y = NULL
   )

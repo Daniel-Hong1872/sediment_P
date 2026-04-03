@@ -130,8 +130,8 @@ herb_urchin_region <- herb_urchin %>%
   summarise(Total = n(), .groups = "drop")
 
 urchin_color <- c(
-  "Diadema" = "#6BAED6",
-  "Echinothrix" = "#8FCB9B",
+  "Diadema" = "#F2A541",
+  "Echinothrix" = "#C97B84",
   "Stomopneustes" = "#6C6F9A"
 )
 
