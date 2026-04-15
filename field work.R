@@ -1,3 +1,5 @@
+# Result
+
 setwd("C:/Users/dan91/OneDrive/桌面/Field work")
 library(tidyverse)
 library(readxl)
@@ -9,12 +11,12 @@ library(performance)
 library(glmmTMB)
 library(DHARMa)
 
-# import data
+# import data----
 sed <- read_excel("CNP_data.xlsx", sheet = "sediment", na = "NA")
 P <- read_excel("CNP_data.xlsx", sheet = "P", na = "NA")
 IO <- read_excel("CNP_data.xlsx", sheet = "Inorganic vs. Organic", na = "NA")
 
-## Sediment across region----
+# Sediment across region----
 
 sed <- sed %>% 
   rename(
@@ -29,18 +31,20 @@ sed <- sed %>%
 V_ml <- 5
 P <- P %>%
   rename(
-    A_cmgL = `sample A_P concentration(mg/L)`,
-    B_cmgL = `sample B_P concentration(mg/L)`,
-    A_wmg = `A subsample_P weight(mg)`,
-    B_wmg = `B subsample_P weight(mg)`
+    sediment_id = sediment,
+    bulk_P_mgL = `sample A_P concentration(mg/L)`,
+    algal_P_mgL = `sample B_P concentration(mg/L)`,
+    bulk_P_mg = `A subsample_P weight(mg)`,
+    algal_P_mg = `B subsample_P weight(mg)`
   ) %>%
   mutate(
-    bulk_P_mgg = (A_cmgL * V_ml / 1000) / A_wmg * 1000,
-    algal_P_mgg = (B_cmgL * V_ml / 1000)/ B_wmg * 1000
+    bulk_P_mgg = (bulk_P_mgL * V_ml / 1000) / bulk_P_mg * 1000,
+    algal_P_mgg = (algal_P_mgL * V_ml / 1000)/ algal_P_mg * 1000
   )
 
 IO <- IO %>%
   rename(
+    sediment_id = sediment,
     tube = `tube(g)`,
     subsample = `subsample(g)`,
     wo_salt = `tube+subsample w/o salt`,
@@ -71,7 +75,7 @@ sed_site_mean <- sed %>%
     .groups = "drop"
   )
 
-# sediment weight vs. depth
+## sediment weight vs. depth----
 sed_depth <- 
   ggplot(sed_site_mean, aes(x = depth, y = sediment_weight)) + 
   geom_point() +
@@ -80,7 +84,7 @@ sed_depth <-
   theme_bw()
 sed_depth
 
-# sediment weight vs. temperature
+## sediment weight vs. temperature----
 sed_temp <- 
   ggplot(sed_site_mean, aes(x = temperature, y = sediment_weight)) + 
   geom_point() +
@@ -89,7 +93,7 @@ sed_temp <-
   theme_bw()
 sed_temp
 
-# sediment weight vs. region
+## sediment weight vs. region----
 sed_region <- 
   ggplot(sed_site_mean, aes(Region, sediment_weight, fill = Region)) +
   geom_boxplot() +
@@ -99,12 +103,15 @@ sed_region <-
   theme_bw()
 sed_region
 
-## Sea urchins----
+
+# Sea urchins----
 
 XLQ_ur <- read_excel("urchin density.xlsx", sheet = "XLQ") %>% 
   mutate(Region = "XLQ")
+
 GI_ur <- read_excel("urchin density.xlsx", sheet = "GI") %>%
   mutate(Region = "GI")
+
 NE_ur <- read_excel("urchin density.xlsx", sheet = "NE") %>%
   mutate(Region = "NE")
 
@@ -127,14 +134,68 @@ urchin_color <- c(
 herb_urchin_sum_region <- 
   ggplot(herb_urchin_region, aes(Region, Total, fill = Genus)) +
   geom_col() +
-  scale_fill_manual(values = urchin_color, drop = F) +
+  scale_fill_manual(values = urchin_color, drop = FALSE) +
   theme_bw() +
   labs(x = "Region", y = "Total number of urchins", fill = "Genus")
+
 herb_urchin_sum_region
 
+all_samples <- urchin_all %>%
+  distinct(Region, Site)
 
-## Nutrient concentration across region----
+urchin_density <- herb_urchin %>%
+  count(Region, Site, name = "count") %>%
+  right_join(all_samples, by = c("Region", "Site")) %>%
+  mutate(
+    count = replace_na(count, 0),
+    density = count / 10
+  ) %>%
+  arrange(Region, Site)
+urchin_density
 
+urchin_summary <- urchin_density %>%
+  group_by(Region) %>%
+  summarise(
+    mean_density = mean(density, na.rm = TRUE),
+    sd_density = sd(density, na.rm = TRUE),
+    n = n(),
+    .groups = "drop"
+  )
+urchin_summary
+
+kruskal.test(density ~ Region, data = urchin_density)
+
+pairwise.wilcox.test(
+  x = urchin_density$density,
+  g = urchin_density$Region,
+  p.adjust.method = "BH"
+)
+
+urchin_plot <- 
+  ggplot(urchin_density, aes(x = Region, y = density, color = Region)) +
+  stat_summary(
+    fun.data = mean_sdl,
+    fun.args = list(mult = 1),
+    geom = "errorbar",
+    width = 0.12
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    size = 4
+  ) +
+  scale_color_manual(values = region_color) +
+  guides(color = "none") +
+  theme_bw() +
+  labs(
+    x = NULL,
+    y = expression("Density (ind m"^{-2}*")")
+  )
+urchin_plot
+
+urchin_plot / herb_urchin_sum_region
+
+# Nutrient concentration across region----
 
 P_site_mean <- P %>% 
   group_by(Region, site) %>%
@@ -144,11 +205,11 @@ P_site_mean <- P %>%
     .groups = "drop"
   )
 
-
 CN <- read_excel("CNP_data.xlsx", sheet = "CN", na = "NA")
 
 CN <- CN %>%
   rename(
+    sediment_id = sediment,
     bulk_mg = `sample_a_weight_mg`,
     bulk_N_pct = `sample_a_N%`,
     bulk_C_pct = `sample_a_C%`,
@@ -170,62 +231,66 @@ CN <- CN %>%
     algal_N_mmolg = algal_N_mgg / 14
   )
 
+## P adjusted to OM basis ----
 
-P_join <- P %>%
-  select(Region, site, sediment, bulk_P_mgg, algal_P_mgg)
-
-CNP_sample <- CN %>%
-  left_join(P_join, by = c("Region", "site", "sediment")) %>%
+P_org <- P %>%
+  left_join(
+    IO %>% select(Region, site, sediment_id, inorg_pct, org_pct),
+    by = c("Region", "site", "sediment_id")
+  ) %>%
   mutate(
-    Camera = gsub("S", "C", sediment),
-    
-    # P molar
-    bulk_P_mmolg  = bulk_P_mgg / 31,
-    algal_P_mmolg = algal_P_mgg / 31,
-    
-    # molar ratios
-    bulk_CN_ratio  = bulk_C_mmolg / bulk_N_mmolg,
-    algal_CN_ratio = algal_C_mmolg / algal_N_mmolg,
-    bulk_CP_ratio  = bulk_C_mmolg / bulk_P_mmolg,
-    algal_CP_ratio = algal_C_mmolg / algal_P_mmolg,
-    bulk_NP_ratio  = bulk_N_mmolg / bulk_P_mmolg,
-    algal_NP_ratio = algal_N_mmolg / algal_P_mmolg
+    bulk_P_org_mgg = if_else(org_pct > 0, bulk_P_mgg / org_pct * 100, NA_real_),
+    bulk_P_org_mmolg = bulk_P_org_mgg / 31,
+    algal_P_mmolg = algal_P_mgg / 31
   )
 
-
-CNP_site_mean <- CNP_sample %>%
+CNP_site_mean_adj <- CN %>%
+  left_join(
+    P_org %>% select(
+      Region, site, sediment_id,
+      algal_P_mgg, algal_P_mmolg,
+      bulk_P_org_mgg, bulk_P_org_mmolg
+    ),
+    by = c("Region", "site", "sediment_id")
+  ) %>%
+  mutate(
+    Camera = gsub("S", "C", sediment_id)
+  ) %>%
   group_by(Region, site) %>%
   summarise(
-    # concentration
-    bulk_C_mean = mean(bulk_C_mgg, na.rm = TRUE),
-    bulk_N_mean = mean(bulk_N_mgg, na.rm = TRUE),
-    bulk_P_mean = mean(bulk_P_mgg, na.rm = TRUE),
-    algal_C_mean = mean(algal_C_mgg, na.rm = TRUE),
-    algal_N_mean = mean(algal_N_mgg, na.rm = TRUE),
-    algal_P_mean = mean(algal_P_mgg, na.rm = TRUE),
-    
-    # molar ratios
-    bulk_CN_ratio = mean(bulk_CN_ratio, na.rm = TRUE),
-    algal_CN_ratio = mean(algal_CN_ratio, na.rm = TRUE),
-    bulk_CP_ratio = mean(bulk_CP_ratio, na.rm = TRUE),
-    algal_CP_ratio = mean(algal_CP_ratio, na.rm = TRUE),
-    bulk_NP_ratio = mean(bulk_NP_ratio, na.rm = TRUE),
-    algal_NP_ratio = mean(algal_NP_ratio, na.rm = TRUE),
+    across(
+      c(
+        bulk_C_mgg, bulk_N_mgg, bulk_P_org_mgg,
+        algal_C_mgg, algal_N_mgg, algal_P_mgg,
+        bulk_C_mmolg, bulk_N_mmolg, bulk_P_org_mmolg,
+        algal_C_mmolg, algal_N_mmolg, algal_P_mmolg
+      ),
+      ~ mean(.x, na.rm = TRUE),
+      .names = "{.col}_mean"
+    ),
     .groups = "drop"
+  ) %>%
+  mutate(
+    bulk_CN_ratio_adj = bulk_C_mmolg_mean / bulk_N_mmolg_mean,
+    algal_CN_ratio    = algal_C_mmolg_mean / algal_N_mmolg_mean,
+    bulk_CP_ratio_adj = bulk_C_mmolg_mean / bulk_P_org_mmolg_mean,
+    algal_CP_ratio    = algal_C_mmolg_mean / algal_P_mmolg_mean,
+    bulk_NP_ratio_adj = bulk_N_mmolg_mean / bulk_P_org_mmolg_mean,
+    algal_NP_ratio    = algal_N_mmolg_mean / algal_P_mmolg_mean
   )
 
-
-CNP_conc_long <- CNP_site_mean %>%
+CNP_conc_long_adj <- CNP_site_mean_adj %>%
   pivot_longer(
     cols = c(
-      bulk_C_mean, bulk_N_mean, bulk_P_mean,
-      algal_C_mean, algal_N_mean, algal_P_mean
+      bulk_C_mgg_mean, bulk_N_mgg_mean, bulk_P_org_mgg_mean,
+      algal_C_mgg_mean, algal_N_mgg_mean, algal_P_mgg_mean
     ),
     names_to = "type",
     values_to = "value"
   )
 
-ggplot(CNP_conc_long, aes(x = Region, y = value, fill = Region)) +
+CNP_conc_adj <- 
+  ggplot(CNP_conc_long_adj, aes(x = Region, y = value, fill = Region)) +
   geom_boxplot(outlier.shape = NA) +
   geom_jitter(width = 0.15, alpha = 0.8) +
   scale_fill_manual(values = region_color) +
@@ -236,20 +301,21 @@ ggplot(CNP_conc_long, aes(x = Region, y = value, fill = Region)) +
     x = "Region",
     y = "Concentration (mg/g)"
   )
+CNP_conc_adj
 
-
-CNP_ratio_long <- CNP_site_mean %>%
+CNP_ratio_long_adj <- CNP_site_mean_adj %>%
   pivot_longer(
     cols = c(
-      bulk_CN_ratio, algal_CN_ratio,
-      bulk_CP_ratio, algal_CP_ratio,
-      bulk_NP_ratio, algal_NP_ratio
+      bulk_CN_ratio_adj, algal_CN_ratio,
+      bulk_CP_ratio_adj, algal_CP_ratio,
+      bulk_NP_ratio_adj, algal_NP_ratio
     ),
     names_to = "type",
     values_to = "value"
   )
 
-ggplot(CNP_ratio_long, aes(x = Region, y = value, fill = Region)) +
+CNP_ratio_adj <- 
+  ggplot(CNP_ratio_long_adj, aes(x = Region, y = value, fill = Region)) +
   geom_boxplot(outlier.shape = NA) +
   geom_jitter(width = 0.15, alpha = 0.8) +
   scale_fill_manual(values = region_color) +
@@ -260,11 +326,261 @@ ggplot(CNP_ratio_long, aes(x = Region, y = value, fill = Region)) +
     x = "Region",
     y = "Molar ratio"
   )
+CNP_ratio_adj
+
+bulk_CNP_ratio_table_adj <- CNP_site_mean_adj %>%
+  group_by(Region) %>%
+  summarise(
+    bulk_C = mean(bulk_C_mmolg_mean, na.rm = TRUE),
+    bulk_N = mean(bulk_N_mmolg_mean, na.rm = TRUE),
+    bulk_P = mean(bulk_P_org_mmolg_mean, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    C_rel = bulk_C / bulk_P,
+    N_rel = bulk_N / bulk_P,
+    P_rel = 1,
+    C_int = round(C_rel),
+    N_int = round(N_rel),
+    P_int = 1
+  ) %>%
+  transmute(
+    Region,
+    `C:N:P` = paste0(C_int, " : ", N_int, " : ", P_int)
+  )
+bulk_CNP_ratio_table_adj
+
+## CN adjusted back to bulk basis ----
+
+P_IO_adj <- P %>%
+  left_join(
+    IO %>% select(Region, site, sediment_id, inorg_pct, org_pct),
+    by = c("Region", "site", "sediment_id")
+  ) %>%
+  mutate(
+    bulk_P_mmolg = bulk_P_mgg / 31,
+    algal_P_mmolg = algal_P_mgg / 31
+  )
+
+CNP_adj_2 <- CN %>%
+  left_join(
+    P_IO_adj %>% select(
+      Region, site, sediment_id, org_pct,
+      algal_P_mgg, algal_P_mmolg,
+      bulk_P_mgg, bulk_P_mmolg
+    ),
+    by = c("Region", "site", "sediment_id")
+  ) %>%
+  mutate(
+    Camera = gsub("S", "C", sediment_id),
+    bulk_C_mgg_adj = bulk_C_mgg * org_pct / 100,
+    bulk_N_mgg_adj = bulk_N_mgg * org_pct / 100,
+    bulk_C_mmolg_adj = bulk_C_mmolg * org_pct / 100,
+    bulk_N_mmolg_adj = bulk_N_mmolg * org_pct / 100
+  )
+
+CNP_site_mean_adj_2 <- CNP_adj_2 %>%
+  group_by(Region, site) %>%
+  summarise(
+    across(
+      c(
+        bulk_C_mgg_adj, bulk_N_mgg_adj, bulk_P_mgg,
+        algal_C_mgg, algal_N_mgg, algal_P_mgg,
+        bulk_C_mmolg_adj, bulk_N_mmolg_adj, bulk_P_mmolg,
+        algal_C_mmolg, algal_N_mmolg, algal_P_mmolg
+      ),
+      ~ mean(.x, na.rm = TRUE),
+      .names = "{.col}_mean"
+    ),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    bulk_CN_ratio_adj = bulk_C_mmolg_adj_mean / bulk_N_mmolg_adj_mean,
+    algal_CN_ratio    = algal_C_mmolg_mean / algal_N_mmolg_mean,
+    bulk_CP_ratio_adj = bulk_C_mmolg_adj_mean / bulk_P_mmolg_mean,
+    algal_CP_ratio    = algal_C_mmolg_mean / algal_P_mmolg_mean,
+    bulk_NP_ratio_adj = bulk_N_mmolg_adj_mean / bulk_P_mmolg_mean,
+    algal_NP_ratio    = algal_N_mmolg_mean / algal_P_mmolg_mean
+  )
+
+CNP_conc_long_adj_2 <- CNP_site_mean_adj_2 %>%
+  pivot_longer(
+    cols = c(
+      bulk_C_mgg_adj_mean, bulk_N_mgg_adj_mean, bulk_P_mgg_mean,
+      algal_C_mgg_mean, algal_N_mgg_mean, algal_P_mgg_mean
+    ),
+    names_to = "type",
+    values_to = "value"
+  )
+
+CNP_conc_adj_2 <- 
+  ggplot(CNP_conc_long_adj_2, aes(x = Region, y = value, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, alpha = 0.8) +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
+  facet_wrap(~ type, scales = "free_y",
+             labeller = as_labeller(c(
+               "bulk_C_mgg_adj_mean" = "Carbon (mg g⁻¹)",
+               "bulk_N_mgg_adj_mean" = "Nitrogen (mg g⁻¹)",
+               "bulk_P_mgg_mean"     = "Phosphorus (mg g⁻¹)"
+             ))) +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = "Concentration (mg/g)"
+  )
+CNP_conc_adj_2
+
+CNP_ratio_long_adj_2 <- CNP_site_mean_adj_2 %>%
+  pivot_longer(
+    cols = c(
+      bulk_CN_ratio_adj, algal_CN_ratio,
+      bulk_CP_ratio_adj, algal_CP_ratio,
+      bulk_NP_ratio_adj, algal_NP_ratio
+    ),
+    names_to = "type",
+    values_to = "value"
+  )
+
+CNP_ratio_adj_2 <- 
+  ggplot(CNP_ratio_long_adj_2, aes(x = Region, y = value, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, alpha = 0.8) +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
+  facet_wrap(~ type, scales = "free_y",
+             labeller = as_labeller(c(
+               "bulk_CN_ratio_adj" = "C:N ratio",
+               "bulk_CP_ratio_adj" = "C:P ratio",
+               "bulk_NP_ratio_adj" = "N:P ratio"
+             ))) +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = "Molar ratio"
+  )
+CNP_ratio_adj_2
+
+bulk_CNP_ratio_table_adj_2 <- CNP_site_mean_adj_2 %>%
+  group_by(Region) %>%
+  summarise(
+    bulk_C = mean(bulk_C_mmolg_adj_mean, na.rm = TRUE),
+    bulk_N = mean(bulk_N_mmolg_adj_mean, na.rm = TRUE),
+    bulk_P = mean(bulk_P_mmolg_mean, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    C_rel = bulk_C / bulk_P,
+    N_rel = bulk_N / bulk_P,
+    P_rel = 1,
+    C_int = round(C_rel),
+    N_int = round(N_rel),
+    P_int = 1
+  ) %>%
+  transmute(
+    Region,
+    `C:N:P` = paste0(C_int, " : ", N_int, " : ", P_int)
+  )
+bulk_CNP_ratio_table_adj_2
+
+kruskal.test(bulk_C_mgg_adj_mean ~ Region, data = CNP_site_mean_adj_2)
+
+pairwise.wilcox.test(
+  CNP_site_mean_adj_2$bulk_C_mgg_adj_mean,
+  CNP_site_mean_adj_2$Region,
+  p.adjust.method = "BH"
+)
+
+kruskal.test(bulk_N_mgg_adj_mean ~ Region, data = CNP_site_mean_adj_2)
+
+pairwise.wilcox.test(
+  CNP_site_mean_adj_2$bulk_N_mgg_adj_mean,
+  CNP_site_mean_adj_2$Region,
+  p.adjust.method = "BH"
+)
+
+kruskal.test(bulk_P_mgg_mean ~ Region, data = CNP_site_mean_adj_2)
+
+pairwise.wilcox.test(
+  CNP_site_mean_adj_2$bulk_P_mgg_mean,
+  CNP_site_mean_adj_2$Region,
+  p.adjust.method = "BH"
+)
+
+kruskal.test(bulk_CN_ratio_adj ~ Region, data = CNP_site_mean_adj_2)
+
+kruskal.test(bulk_CP_ratio_adj ~ Region, data = CNP_site_mean_adj_2)
+
+kruskal.test(bulk_NP_ratio_adj ~ Region, data = CNP_site_mean_adj_2)
+
+## bulk only plot----
+
+p1_data <- CNP_site_mean_adj_2 %>%
+  select(
+    Region,
+    bulk_C_mgg_adj_mean,
+    bulk_N_mgg_adj_mean,
+    bulk_P_mgg_mean
+  ) %>%
+  pivot_longer(
+    cols = -Region,
+    names_to = "variable",
+    values_to = "value"
+  )
+
+p1 <- ggplot(p1_data, aes(x = Region, y = value, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, alpha = 0.8) +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
+  facet_wrap(~ variable, scales = "free_y", ncol = 3,
+             labeller = as_labeller(c(
+               "bulk_C_mgg_adj_mean" = "Carbon (mg g⁻¹)",
+               "bulk_N_mgg_adj_mean" = "Nitrogen (mg g⁻¹)",
+               "bulk_P_mgg_mean"     = "Phosphorus (mg g⁻¹)"
+             ))) +
+  theme_bw() +
+  labs(
+    x = NULL,
+    y = "Concentration (mg/g)"
+  )
+p1
+
+p2_data <- CNP_site_mean_adj_2 %>%
+  select(
+    Region,
+    bulk_CN_ratio_adj,
+    bulk_CP_ratio_adj,
+    bulk_NP_ratio_adj
+  ) %>%
+  pivot_longer(
+    cols = -Region,
+    names_to = "variable",
+    values_to = "value"
+  )
+
+p2 <- ggplot(p2_data, aes(x = Region, y = value, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, alpha = 0.8) +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
+  facet_wrap(~ variable, scales = "free_y", ncol = 3,
+             labeller = as_labeller(c(
+               "bulk_CN_ratio_adj" = "C:N ratio",
+               "bulk_CP_ratio_adj" = "C:P ratio",
+               "bulk_NP_ratio_adj" = "N:P ratio"
+             ))) +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = "Molar ratio"
+  )
+p2
+
+p1/p2
 
 ## IO across region----
-
-IO <- IO %>%
-  rename(sediment_id = sediment)
 
 IO_site <- IO %>%
   group_by(Region, site) %>%
@@ -316,9 +632,15 @@ IO_pct <-
   )
 IO_pct
 
-## Fish bites----
+kruskal.test(org_pct ~ Region, data = IO_site)
 
-### Trophic group/Herbivore functional group bite rate
+pairwise.wilcox.test(
+  IO_site$org_pct,
+  IO_site$Region,
+  p.adjust.method = "BH"
+)
+
+# Fish bites----
 
 bite <- read_excel("Fish bite_data.xlsx")
 
@@ -331,7 +653,7 @@ bite <- bite %>%
            "Herbivore", "Benthic invertivore", "Corallivore", "Omnivore"
          ))
 
-# bite rate of different trophic groups
+## bite rate of different trophic groups----
 bite_quad_trophic <- bite %>%
   group_by(Region, site, Camera, `trophic group`) %>%
   summarise(
@@ -368,7 +690,8 @@ trophic_region <-
   )
 trophic_region
 
-# bite rate of different herbivore functional groups
+## bite rate of different herbivore functional groups----
+
 bite_quad_func <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
   group_by(Region, site, Camera, `herbivore functional group`) %>%
@@ -406,7 +729,7 @@ herb_func_region <-
   )
 herb_func_region
 
-# Bite rate by quadrat
+## Bite rate by quadrat----
 
 bite_by_quadrat <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
@@ -433,7 +756,7 @@ bite_by_quadrat <- bite_by_quadrat %>%
     event_rate = n_events * 60 / duration
   )
 
-# 1. occurrence of herbivore feeding
+## 1.  occurrence of herbivore feeding----
 
 camera_zero_summary <- bite_by_quadrat %>%
   mutate(has_herbivore = n_events > 0) %>%
@@ -458,8 +781,7 @@ ggplot(camera_zero_summary, aes(x = Region, y = prop_with_herbivore, fill = Regi
     title = "Occurrence of herbivore feeding among regions"
   )
 
-
-# 2. Herbivore grazing pressure (total bite rate/event rate/bite per event)
+## 2.  Herbivore grazing pressure (total bite rate/event rate/bite per event)----
 
 bite_herb_all <- bite_by_quadrat %>%
   select(Region, total_bite_rate, event_rate) %>%
@@ -489,6 +811,22 @@ herb_grazing_pressure <-
     y = NULL
   )
 herb_grazing_pressure
+
+kruskal.test(total_bite_rate ~ Region, data = bite_by_quadrat)
+
+pairwise.wilcox.test(
+  bite_by_quadrat$total_bite_rate,
+  bite_by_quadrat$Region,
+  p.adjust.method = "BH"
+)
+
+kruskal.test(event_rate ~ Region, data = bite_by_quadrat)
+
+pairwise.wilcox.test(
+  bite_by_quadrat$event_rate,
+  bite_by_quadrat$Region,
+  p.adjust.method = "BH"
+)
 
 # exclude zero bite data for bite per event
 herb_bite_positive <- bite_by_quadrat %>%
@@ -521,61 +859,9 @@ bites_per_event_plot <-
   )
 bites_per_event_plot
 
+kruskal.test(mean_bites_per_event ~ Region, data = herb_bite_positive)
 
-# 3. Grazing pressure vs. region model, site as random effect
-
-# total bite/number of event -> GLMMs
-# bite per event -> LMMs
-
-total_bite_region <- glmmTMB(
-  total_bites ~ Region + (1 | site),
-  family = nbinom2,
-  data = bite_by_quadrat
-)
-
-event_region <- glmmTMB(
-  n_events ~ Region + (1 | site),
-  family = nbinom2,
-  data = bite_by_quadrat
-)
-
-check_overdispersion(total_bite_region)
-check_zeroinflation(total_bite_region)
-res_total <- simulateResiduals(total_bite_region)
-plot(res_total)
-testDispersion(res_total)
-testZeroInflation(res_total)
-testOutliers(res_total)
-
-check_overdispersion(event_region)
-check_zeroinflation(event_region)
-res_event <- simulateResiduals(event_region)
-plot(res_event)
-testDispersion(res_event)
-testZeroInflation(res_event)
-testOutliers(res_event)
-
-summary(total_bite_region)
-summary(event_region)
-
-emmeans(total_bite_region, pairwise ~ Region, type = "response")
-emmeans(event_region, pairwise ~ Region, type = "response")
-
-bite_per_event_region <- glmmTMB(
-  mean_bites_per_event ~ Region + (1 | site),
-  family = Gamma(link = "log"),
-  data = herb_bite_positive
-)
-
-sim_res <- simulate_residuals(bite_per_event_region)
-plot(sim_res)
-testDispersion(sim_res)
-
-summary(bite_per_event_region)
-
-emmeans(bite_per_event_region, pairwise ~ Region, type = "response")
-
-## Bite per event adjust for nutrient----
+## Bite per event adjust by nutrient----
 
 IO_site_mean <- IO %>%
   group_by(Region, site) %>%
@@ -590,13 +876,17 @@ IO_site_mean <- IO %>%
   )
 
 herb_bite_positive <- herb_bite_positive %>%
-  left_join(IO_site_mean, by = c("Region", "site")) %>%
-  left_join(CNP_site_mean, by = c("Region", "site")) %>%
+  left_join(
+    IO_site_mean, 
+    by = c("Region", "site")) %>%
+  left_join(
+    CNP_site_mean_adj_2, 
+    by = c("Region", "site"))  %>%
   mutate(
     bites_per_event_org_adj = mean_bites_per_event / org_g_mean,
-    bites_per_event_C_adj   = mean_bites_per_event / bulk_C_mean,
-    bites_per_event_N_adj   = mean_bites_per_event / bulk_N_mean,
-    bites_per_event_P_adj   = mean_bites_per_event / algal_P_mean
+    bites_per_event_C_adj   = mean_bites_per_event / bulk_C_mgg_adj_mean,
+    bites_per_event_N_adj   = mean_bites_per_event / bulk_N_mgg_adj_mean,
+    bites_per_event_P_adj   = mean_bites_per_event / bulk_P_mgg_mean
   )
 
 # Long format for plotting
@@ -629,17 +919,17 @@ bite_per_event_adj <- herb_bite_positive %>%
         "bites_per_event_P_adj"
       ),
       labels = c(
-        "adjusted for organic matter",
-        "adjusted for bulk C",
-        "adjusted for bulk N",
-        "adjusted for algal P"
+        "adjusted by organic matter",
+        "adjusted by bulk C",
+        "adjusted by bulk N",
+        "adjusted by bulk P"
       )
     )
   )
 
 # Plot
 
-bite_per_event_ad_plot <- 
+bite_per_event_adj_plot <- 
   ggplot(bite_per_event_adj, aes(Region, value, fill = Region)) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
   stat_summary(fun = mean, geom = "point", color = "red") +
@@ -649,9 +939,9 @@ bite_per_event_ad_plot <-
   guides(fill = "none") +
   theme_bw() +
   labs(
-    title = "Bites per event adjusted for nutrient content",
+    title = "Bites per event adjusted by nutrient content",
     x = "Region",
     y = NULL
   )
 
-bite_per_event_ad_plot
+bite_per_event_adj_plot
