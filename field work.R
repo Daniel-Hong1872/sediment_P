@@ -884,9 +884,9 @@ herb_bite_positive <- herb_bite_positive %>%
     by = c("Region", "site"))  %>%
   mutate(
     bites_per_event_org_adj = mean_bites_per_event / org_g_mean,
-    bites_per_event_C_adj   = mean_bites_per_event / bulk_C_mgg_adj_mean,
-    bites_per_event_N_adj   = mean_bites_per_event / bulk_N_mgg_adj_mean,
-    bites_per_event_P_adj   = mean_bites_per_event / bulk_P_mgg_mean
+    bites_per_event_CN_adj = mean_bites_per_event / bulk_CN_ratio_adj,
+    bites_per_event_CP_adj = mean_bites_per_event / bulk_CP_ratio_adj,
+    bites_per_event_NP_adj = mean_bites_per_event / bulk_NP_ratio_adj
   )
 
 # Long format for plotting
@@ -895,16 +895,16 @@ bite_per_event_adj <- herb_bite_positive %>%
   select(
     Region,
     bites_per_event_org_adj,
-    bites_per_event_C_adj,
-    bites_per_event_N_adj,
-    bites_per_event_P_adj
+    bites_per_event_CN_adj,
+    bites_per_event_CP_adj,
+    bites_per_event_NP_adj
   ) %>%
   pivot_longer(
     cols = c(
       bites_per_event_org_adj,
-      bites_per_event_C_adj,
-      bites_per_event_N_adj,
-      bites_per_event_P_adj
+      bites_per_event_CN_adj,
+      bites_per_event_CP_adj,
+      bites_per_event_NP_adj
     ),
     names_to = "metric",
     values_to = "value"
@@ -914,15 +914,15 @@ bite_per_event_adj <- herb_bite_positive %>%
       metric,
       levels = c(
         "bites_per_event_org_adj",
-        "bites_per_event_C_adj",
-        "bites_per_event_N_adj",
-        "bites_per_event_P_adj"
+        "bites_per_event_CN_adj",
+        "bites_per_event_CP_adj",
+        "bites_per_event_NP_adj"
       ),
       labels = c(
         "adjusted by organic matter",
-        "adjusted by bulk C",
-        "adjusted by bulk N",
-        "adjusted by bulk P"
+        "adjusted by C:N",
+        "adjusted by C:P",
+        "adjusted by N:P"
       )
     )
   )
@@ -939,7 +939,7 @@ bite_per_event_adj_plot <-
   guides(fill = "none") +
   theme_bw() +
   labs(
-    title = "Bites per event adjusted by nutrient content",
+    title = "Bites per event adjusted by nutrient quality",
     x = "Region",
     y = NULL
   )
