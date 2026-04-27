@@ -945,3 +945,50 @@ bite_per_event_adj_plot <-
   )
 
 bite_per_event_adj_plot
+
+# check bite per event and CP, NP ratio----
+
+cor.test(herb_bite_positive$mean_bites_per_event,
+         herb_bite_positive$bulk_CP_ratio_adj,
+         method = "spearman")
+
+cor.test(herb_bite_positive$mean_bites_per_event,
+         herb_bite_positive$bulk_NP_ratio_adj,
+         method = "spearman")
+
+bite_vs_ratio <- herb_bite_positive %>%
+  select(mean_bites_per_event, bulk_CP_ratio_adj, bulk_NP_ratio_adj, Region) %>%
+  pivot_longer(
+    cols = c(bulk_CP_ratio_adj, bulk_NP_ratio_adj),
+    names_to = "Ratio",
+    values_to = "Value"
+  )
+
+bite_vs_ratio$Ratio <- recode(bite_vs_ratio$Ratio,
+                          "bulk_CP_ratio_adj" = "C:P ratio",
+                          "bulk_NP_ratio_adj" = "N:P ratio")
+
+bite_vs_ratio_plot <- 
+  ggplot(bite_vs_ratio, aes(x = Value, y = mean_bites_per_event, color = Region)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(~ Ratio, scales = "free_x") +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Stoichiometric ratio",
+    y = "Bite per event",
+    color = "Region"
+  ) +
+  theme_bw()
+bite_vs_ratio_plot
+
+NE_bite_per_event <- herb_bite_positive %>%
+  filter(Region == "NE")
+
+cor.test(NE_bite_per_event$mean_bites_per_event,
+         NE_bite_per_event$bulk_CP_ratio_adj,
+         method = "spearman")
+
+cor.test(NE_bite_per_event$mean_bites_per_event,
+         NE_bite_per_event$bulk_NP_ratio_adj,
+         method = "spearman")
