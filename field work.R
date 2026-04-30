@@ -881,7 +881,7 @@ herb_bite_positive <- herb_bite_positive %>%
     by = c("Region", "site")) %>%
   left_join(
     CNP_site_mean_adj_2, 
-    by = c("Region", "site"))  %>%
+    by = c("Region", "site")) %>%
   mutate(
     bites_per_event_org_adj = mean_bites_per_event / org_g_mean,
     bites_per_event_CN_adj = mean_bites_per_event / bulk_CN_ratio_adj,
@@ -946,7 +946,15 @@ bite_per_event_adj_plot <-
 
 bite_per_event_adj_plot
 
-# check bite per event and CP, NP ratio----
+## correlation of nutritional quality and bite per event----
+
+cor.test(herb_bite_positive$mean_bites_per_event,
+         herb_bite_positive$org_pct_mean,
+         method = "spearman")
+
+cor.test(herb_bite_positive$mean_bites_per_event,
+         herb_bite_positive$bulk_CN_ratio_adj,
+         method = "spearman")
 
 cor.test(herb_bite_positive$mean_bites_per_event,
          herb_bite_positive$bulk_CP_ratio_adj,
@@ -957,16 +965,17 @@ cor.test(herb_bite_positive$mean_bites_per_event,
          method = "spearman")
 
 bite_vs_ratio <- herb_bite_positive %>%
-  select(mean_bites_per_event, bulk_CP_ratio_adj, bulk_NP_ratio_adj, Region) %>%
+  select(mean_bites_per_event, bulk_CN_ratio_adj, bulk_CP_ratio_adj, bulk_NP_ratio_adj, Region) %>%
   pivot_longer(
-    cols = c(bulk_CP_ratio_adj, bulk_NP_ratio_adj),
+    cols = c(bulk_CN_ratio_adj, bulk_CP_ratio_adj, bulk_NP_ratio_adj),
     names_to = "Ratio",
     values_to = "Value"
   )
 
 bite_vs_ratio$Ratio <- recode(bite_vs_ratio$Ratio,
                           "bulk_CP_ratio_adj" = "C:P ratio",
-                          "bulk_NP_ratio_adj" = "N:P ratio")
+                          "bulk_NP_ratio_adj" = "N:P ratio",
+                          "bulk_CN_ratio_adj" = "C:N ratio")
 
 bite_vs_ratio_plot <- 
   ggplot(bite_vs_ratio, aes(x = Value, y = mean_bites_per_event, color = Region)) +
@@ -986,9 +995,546 @@ NE_bite_per_event <- herb_bite_positive %>%
   filter(Region == "NE")
 
 cor.test(NE_bite_per_event$mean_bites_per_event,
+         NE_bite_per_event$bulk_CN_ratio_adj,
+         method = "spearman")
+
+cor.test(NE_bite_per_event$mean_bites_per_event,
          NE_bite_per_event$bulk_CP_ratio_adj,
          method = "spearman")
 
 cor.test(NE_bite_per_event$mean_bites_per_event,
          NE_bite_per_event$bulk_NP_ratio_adj,
          method = "spearman")
+
+GI_bite_per_event <- herb_bite_positive %>%
+  filter(Region == "GI")
+
+cor.test(GI_bite_per_event$mean_bites_per_event,
+         GI_bite_per_event$bulk_CN_ratio_adj,
+         method = "spearman")
+
+
+# modeling to control nutrient for bite per event----
+
+herb_bite_positive$log_bpe <- log(herb_bite_positive$mean_bites_per_event)
+
+
+hist(herb_bite_positive$log_bpe)
+
+m_CN <- lmer(
+  log_bpe ~ bulk_CN_ratio_adj + Region + (1|site),
+  data = herb_bite_positive
+)
+summary(m_CN)
+
+plot(m_CN)
+
+qqnorm(residuals(m_CN))
+qqline(residuals(m_CN))
+
+m_org <- lmer(
+  log_bpe ~ org_pct_mean + Region + (1|site),
+  data = herb_bite_positive
+)
+summary(m_org)
+
+plot(m_org)
+
+qqnorm(residuals(m_org))
+qqline(residuals(m_org))
+
+m_CP <- lmer(
+  log_bpe ~ bulk_CP_ratio_adj + Region + (1|site),
+  data = herb_bite_positive
+)
+summary(m_CP)
+
+plot(m_CP)
+
+qqnorm(residuals(m_CP))
+qqline(residuals(m_CP))
+
+m_NP <- lmer(
+  log_bpe ~ bulk_NP_ratio_adj + Region + (1|site),
+  data = herb_bite_positive
+)
+summary(m_NP)
+
+plot(m_NP)
+
+qqnorm(residuals(m_NP))
+qqline(residuals(m_NP))
+
+# log bite per event plot----
+
+bite_log_vs_ratio <- herb_bite_positive %>%
+  select(log_bpe, bulk_CN_ratio_adj, bulk_CP_ratio_adj, bulk_NP_ratio_adj, Region) %>%
+  pivot_longer(
+    cols = c(bulk_CN_ratio_adj, bulk_CP_ratio_adj, bulk_NP_ratio_adj),
+    names_to = "Ratio",
+    values_to = "Value"
+  )
+
+bite_log_vs_ratio$Ratio <- recode(bite_log_vs_ratio$Ratio,
+                              "bulk_CP_ratio_adj" = "C:P ratio",
+                              "bulk_NP_ratio_adj" = "N:P ratio",
+                              "bulk_CN_ratio_adj" = "C:N ratio")
+
+bite_log_vs_ratio_plot <- 
+  ggplot(bite_log_vs_ratio, aes(x = Value, y = log_bpe, color = Region)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  facet_wrap(~ Ratio, scales = "free_x") +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Stoichiometric ratio",
+    y = "Bite per event log transformed",
+    color = "Region"
+  ) +
+  theme_bw()
+bite_log_vs_ratio_plot
+
+# all region smooth line
+bite_log_vs_ratio_all_plot <- 
+  ggplot(bite_log_vs_ratio, aes(x = Value, y = log_bpe)) +
+  geom_point(aes(color = Region), size = 2) +
+  geom_smooth(aes(group = 1), method = "lm", se = FALSE, linewidth = 0.8, colour = "grey40") +
+  facet_wrap(~ Ratio, scales = "free_x") +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Stoichiometric ratio",
+    y = "Bite per event log transformed",
+    color = "Region"
+  ) +
+  theme_bw()
+bite_log_vs_ratio_all_plot
+
+## log bpe vs org pct
+
+bite_log_vs_org_pct <- herb_bite_positive %>%
+  select(log_bpe, org_pct_mean, Region)
+
+bite_log_vs_org_pct_plot <- 
+  ggplot(bite_log_vs_org_pct, aes(x = org_pct_mean, y = log_bpe, color = Region)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Organic matter percentage",
+    y = "Bite per event log transformed",
+    color = "Region"
+  ) +
+  theme_bw()
+bite_log_vs_org_pct_plot
+
+bite_log_vs_org_pct_all_plot <- 
+  ggplot(bite_log_vs_org_pct, aes(x = org_pct_mean, y = log_bpe)) +
+  geom_point(aes(color = Region), size = 2) +
+  geom_smooth(aes(group = 1), method = "lm", se = FALSE, linewidth = 0.8, colour = "grey40") +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Organic matter percentage",
+    y = "Bite per event log transformed",
+    color = "Region"
+  ) +
+  theme_bw()
+bite_log_vs_org_pct_all_plot
+
+
+## Quadrat-level BPE vs. organic matter and CNP ratios ----
+
+herb_bite_positive_clean <- bite_by_quadrat %>%
+  filter(n_events > 0)
+
+IO_quadrat <- IO %>%
+  mutate(
+    Camera = gsub("S", "C", sediment_id)
+  ) %>%
+  select(
+    Region,
+    site,
+    Camera,
+    org_pct
+  )
+
+CNP_quadrat <- CNP_adj_2 %>%
+  mutate(
+    bulk_CN_ratio_adj = bulk_C_mmolg_adj / bulk_N_mmolg_adj,
+    bulk_CP_ratio_adj = bulk_C_mmolg_adj / bulk_P_mmolg,
+    bulk_NP_ratio_adj = bulk_N_mmolg_adj / bulk_P_mmolg
+  ) %>%
+  select(
+    Region,
+    site,
+    Camera,
+    bulk_CN_ratio_adj,
+    bulk_CP_ratio_adj,
+    bulk_NP_ratio_adj
+  )
+
+herb_bite_quadrat <- herb_bite_positive_clean %>%
+  left_join(
+    IO_quadrat,
+    by = c("Region", "site", "Camera")
+  ) %>%
+  left_join(
+    CNP_quadrat,
+    by = c("Region", "site", "Camera")
+  ) %>%
+  mutate(
+    log_bpe = log(mean_bites_per_event)
+  )
+
+## Check missing values after joining ----
+
+herb_bite_quadrat %>%
+  summarise(
+    n_total = n(),
+    n_org_NA = sum(is.na(org_pct)),
+    n_CN_NA = sum(is.na(bulk_CN_ratio_adj)),
+    n_CP_NA = sum(is.na(bulk_CP_ratio_adj)),
+    n_NP_NA = sum(is.na(bulk_NP_ratio_adj))
+  )
+
+## Spearman correlation ----
+
+cor_org <- herb_bite_quadrat %>%
+  select(log_bpe, org_pct) %>%
+  drop_na()
+
+cor.test(
+  cor_org$log_bpe,
+  cor_org$org_pct,
+  method = "spearman"
+)
+
+cor_CN <- herb_bite_quadrat %>%
+  select(log_bpe, bulk_CN_ratio_adj) %>%
+  drop_na()
+
+cor.test(
+  cor_CN$log_bpe,
+  cor_CN$bulk_CN_ratio_adj,
+  method = "spearman"
+)
+
+cor_CP <- herb_bite_quadrat %>%
+  select(log_bpe, bulk_CP_ratio_adj) %>%
+  drop_na()
+
+cor.test(
+  cor_CP$log_bpe,
+  cor_CP$bulk_CP_ratio_adj,
+  method = "spearman"
+)
+
+cor_NP <- herb_bite_quadrat %>%
+  select(log_bpe, bulk_NP_ratio_adj) %>%
+  drop_na()
+
+cor.test(
+  cor_NP$log_bpe,
+  cor_NP$bulk_NP_ratio_adj,
+  method = "spearman"
+)
+
+## Plot: log BPE vs. C:N / C:P / N:P ----
+
+bite_log_vs_ratio_quadrat <- herb_bite_quadrat %>%
+  select(
+    log_bpe,
+    bulk_CN_ratio_adj,
+    bulk_CP_ratio_adj,
+    bulk_NP_ratio_adj,
+    Region
+  ) %>%
+  pivot_longer(
+    cols = c(
+      bulk_CN_ratio_adj,
+      bulk_CP_ratio_adj,
+      bulk_NP_ratio_adj
+    ),
+    names_to = "Ratio",
+    values_to = "Value"
+  ) %>%
+  drop_na(log_bpe, Value)
+
+bite_log_vs_ratio_quadrat$Ratio <- recode(
+  bite_log_vs_ratio_quadrat$Ratio,
+  "bulk_CN_ratio_adj" = "C:N ratio",
+  "bulk_CP_ratio_adj" = "C:P ratio",
+  "bulk_NP_ratio_adj" = "N:P ratio"
+)
+
+bite_log_vs_ratio_quadrat_plot <- 
+  ggplot(
+    bite_log_vs_ratio_quadrat,
+    aes(x = Value, y = log_bpe, color = Region)
+  ) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  facet_wrap(~ Ratio, scales = "free_x") +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Stoichiometric ratio",
+    y = "Log bite per event",
+    color = "Region"
+  ) +
+  theme_bw()
+bite_log_vs_ratio_quadrat_plot
+
+bite_log_vs_ratio_quadrat_all_plot <- 
+  ggplot(
+    bite_log_vs_ratio_quadrat,
+    aes(x = Value, y = log_bpe)
+  ) +
+  geom_point(aes(color = Region), size = 2) +
+  geom_smooth(
+    aes(group = 1),
+    method = "lm",
+    se = FALSE,
+    linewidth = 0.8,
+    colour = "grey40"
+  ) +
+  facet_wrap(~ Ratio, scales = "free_x") +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Stoichiometric ratio",
+    y = "Log bite per event",
+    color = "Region"
+  ) +
+  theme_bw()
+
+bite_log_vs_ratio_quadrat_all_plot
+
+## Plot: log BPE vs. organic matter percentage ----
+
+bite_log_vs_org_quadrat <- herb_bite_quadrat %>%
+  select(log_bpe, org_pct, Region) %>%
+  drop_na(log_bpe, org_pct)
+
+bite_log_vs_org_quadrat_plot <- 
+  ggplot(
+    bite_log_vs_org_quadrat,
+    aes(x = org_pct, y = log_bpe, color = Region)
+  ) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Organic matter percentage",
+    y = "Log bite per event",
+    color = "Region"
+  ) +
+  theme_bw()
+
+bite_log_vs_org_quadrat_plot
+
+bite_log_vs_org_quadrat_all_plot <- 
+  ggplot(
+    bite_log_vs_org_quadrat,
+    aes(x = org_pct, y = log_bpe)
+  ) +
+  geom_point(aes(color = Region), size = 2) +
+  geom_smooth(
+    aes(group = 1),
+    method = "lm",
+    se = FALSE,
+    linewidth = 0.8,
+    colour = "grey40"
+  ) +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Organic matter percentage",
+    y = "Log bite per event",
+    color = "Region"
+  ) +
+  theme_bw()
+
+bite_log_vs_org_quadrat_all_plot
+
+# change bite per event into site-level----
+
+bpe_site <- bite_by_quadrat %>%
+  filter(n_events > 0) %>%
+  group_by(Region, site) %>%
+  summarise(bpe_site_mean = mean(mean_bites_per_event, na.rm = T), .groups = "drop") %>%
+  left_join(
+    IO_site_mean, 
+    by = c("Region", "site")) %>%
+  left_join(
+    CNP_site_mean_adj_2, 
+    by = c("Region", "site")) %>%
+  mutate(
+    bites_per_event_org_adj = bpe_site_mean / org_g_mean,
+    bites_per_event_CN_adj = bpe_site_mean / bulk_CN_ratio_adj,
+    bites_per_event_CP_adj = bpe_site_mean / bulk_CP_ratio_adj,
+    bites_per_event_NP_adj = bpe_site_mean / bulk_NP_ratio_adj
+  )
+
+bpe_site_adj <- bpe_site %>%
+  select(
+    Region,
+    bites_per_event_org_adj,
+    bites_per_event_CN_adj,
+    bites_per_event_CP_adj,
+    bites_per_event_NP_adj
+  ) %>%
+  pivot_longer(
+    cols = c(
+      bites_per_event_org_adj,
+      bites_per_event_CN_adj,
+      bites_per_event_CP_adj,
+      bites_per_event_NP_adj
+    ),
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(
+    metric = factor(
+      metric,
+      levels = c(
+        "bites_per_event_org_adj",
+        "bites_per_event_CN_adj",
+        "bites_per_event_CP_adj",
+        "bites_per_event_NP_adj"
+      ),
+      labels = c(
+        "adjusted by organic matter",
+        "adjusted by C:N",
+        "adjusted by C:P",
+        "adjusted by N:P"
+      )
+    )
+  )
+
+# bpe site mean adj plot
+
+bpe_site_adj_plot <- 
+  ggplot(bpe_site_adj, aes(Region, value, fill = Region)) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", color = "red") +
+  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.12) +
+  scale_fill_manual(values = region_color) +
+  facet_wrap(~metric, scales = "free_y", nrow = 1) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(
+    title = "Bites per event site mean adjusted by nutrient quality",
+    x = "Region",
+    y = NULL
+  )
+
+bpe_site_adj_plot
+
+bpe_site$log_bpe_site_mean <- log(bpe_site$bpe_site_mean)
+
+log_bpe_site_org <- bpe_site %>%
+  select(log_bpe_site_mean, org_pct_mean, Region)
+
+# log bpe site mean vs. org
+  
+log_bpe_site_org_all_plot <- 
+  ggplot(
+    bpe_site_org,
+    aes(x = org_pct_mean, y = log_bpe_site_mean)
+  ) +
+  geom_point(aes(color = Region), size = 2) +
+  geom_smooth(
+    aes(group = 1),
+    method = "lm",
+    se = FALSE,
+    linewidth = 0.8,
+    colour = "grey40"
+  ) +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Organic matter percentage",
+    y = "Log bite per event site mean",
+    color = "Region"
+  ) +
+  theme_bw()
+log_bpe_site_org_all_plot
+
+log_bpe_site_org_plot <- 
+  ggplot(
+    bpe_site_org,
+    aes(x = org_pct_mean, y = log_bpe_site_mean, color = Region)
+  ) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Organic matter percentage",
+    y = "Log bite per event site mean",
+    color = "Region"
+  ) +
+  theme_bw()
+log_bpe_site_org_plot
+
+# log bpe site mean vs. CNP ratio
+
+log_bpe_site_CNP_ratio <- bpe_site %>%
+  select(
+    log_bpe_site_mean,
+    bulk_CN_ratio_adj,
+    bulk_CP_ratio_adj,
+    bulk_NP_ratio_adj,
+    Region
+  ) %>%
+  pivot_longer(
+    cols = c(
+      bulk_CN_ratio_adj,
+      bulk_CP_ratio_adj,
+      bulk_NP_ratio_adj
+    ),
+    names_to = "Ratio",
+    values_to = "Value"
+  )
+
+log_bpe_site_CNP_ratio$Ratio <- recode(
+  log_bpe_site_CNP_ratio$Ratio,
+  "bulk_CN_ratio_adj" = "C:N ratio",
+  "bulk_CP_ratio_adj" = "C:P ratio",
+  "bulk_NP_ratio_adj" = "N:P ratio"
+)
+
+log_bpe_site_CNP_ratio_all_plot <- 
+  ggplot(
+    log_bpe_site_CNP_ratio,
+    aes(x = Value, y = log_bpe_site_mean)
+  ) +
+  geom_point(aes(color = Region), size = 2) +
+  geom_smooth(
+    aes(group = 1),
+    method = "lm",
+    se = FALSE,
+    linewidth = 0.8,
+    colour = "grey40"
+  ) +
+  facet_wrap(~ Ratio, scales = "free_x") +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Stoichiometric ratio",
+    y = "Log bite per event site mean",
+    color = "Region"
+  ) +
+  theme_bw()
+log_bpe_site_CNP_ratio_all_plot
+
+log_bpe_site_CNP_ratio_plot <- 
+  ggplot(
+    log_bpe_site_CNP_ratio,
+    aes(x = Value, y = log_bpe_site_mean, color = Region)
+  ) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  facet_wrap(~ Ratio, scales = "free_x") +
+  scale_color_manual(values = region_color) +
+  labs(
+    x = "Stoichiometric ratio",
+    y = "Log bite per event site mean",
+    color = "Region"
+  ) +
+  theme_bw()
+log_bpe_site_CNP_ratio_plot
