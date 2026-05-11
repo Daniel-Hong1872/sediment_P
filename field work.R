@@ -144,7 +144,16 @@ urchin_color <- c(
 herb_urchin_sum_region <- 
   ggplot(herb_urchin_region, aes(Region, Total, fill = Genus)) +
   geom_col() +
-  scale_fill_manual(values = urchin_color, drop = FALSE) +
+  scale_fill_manual(
+    values = urchin_color,
+    breaks = c("Diadema", "Echinothrix", "Stomopneustes"),
+    labels = c(
+      expression(italic(Diadema)),
+      expression(italic(Echinothrix)),
+      expression(italic(Stomopneustes))
+    ),
+    drop = FALSE
+  ) +
   theme_bw() +
   labs(x = "Region", y = "Total number of urchins", fill = "Genus")
 
