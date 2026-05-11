@@ -11,6 +11,15 @@ library(performance)
 library(glmmTMB)
 library(DHARMa)
 library(coin)
+library(sf)
+library(terra)
+library(geodata)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(ggspatial)
+library(ggrepel)
+library(ragg)
+library(cowplot)
 
 # import data----
 sed <- read_excel("CNP_data.xlsx", sheet = "sediment", na = "NA")
@@ -173,7 +182,7 @@ urchin_density <- urchin_density %>%
 kruskal_test(
   density ~ Region, 
   data = urchin_density,
-  distribution = approximate(nresample = 9999)
+  distribution = coin::approximate(nresample = 9999)
   )
 
 pairwise.wilcox.test(
@@ -204,7 +213,7 @@ urchin_plot <-
   )
 urchin_plot
 
-urchin_plot / herb_urchin_sum_region
+urchin_plot | herb_urchin_sum_region
 
 # Nutrient concentration across region----
 
@@ -340,7 +349,7 @@ CNP_site_mean_adj_2 <- CNP_site_mean_adj_2 %>%
 
 kruskal_test(bulk_C_mgg_adj_mean ~ Region, 
              data = CNP_site_mean_adj_2,
-             distribution = approximate(nresample = 9999)
+             distribution = coin::approximate(nresample = 9999)
              )
 
 pairwise.wilcox.test(
@@ -351,7 +360,7 @@ pairwise.wilcox.test(
 
 kruskal_test(bulk_N_mgg_adj_mean ~ Region, 
              data = CNP_site_mean_adj_2,
-             distribution = approximate(nresample = 9999)
+             distribution = coin::approximate(nresample = 9999)
              )
 
 pairwise.wilcox.test(
@@ -362,7 +371,7 @@ pairwise.wilcox.test(
 
 kruskal_test(bulk_P_mgg_mean ~ Region, 
              data = CNP_site_mean_adj_2,
-             distribution = approximate(nresample = 9999)
+             distribution = coin::approximate(nresample = 9999)
              )
 
 pairwise.wilcox.test(
@@ -373,17 +382,17 @@ pairwise.wilcox.test(
 
 kruskal_test(bulk_CN_ratio_adj ~ Region, 
              data = CNP_site_mean_adj_2,
-             distribution = approximate(nresample = 9999)
+             distribution = coin::approximate(nresample = 9999)
              )
 
 kruskal_test(bulk_CP_ratio_adj ~ Region, 
              data = CNP_site_mean_adj_2,
-             distribution = approximate(nresample = 9999)
+             distribution = coin::approximate(nresample = 9999)
              )
 
 kruskal_test(bulk_NP_ratio_adj ~ Region, 
              data = CNP_site_mean_adj_2,
-             distribution = approximate(nresample = 9999)
+             distribution = coin::approximate(nresample = 9999)
              )
 
 ## bulk only plot----
@@ -512,7 +521,7 @@ IO_site <- IO_site %>%
 
 kruskal_test(org_pct ~ Region, 
              data = IO_site,
-             distribution = approximate(nresample = 9999)
+             distribution = coin::approximate(nresample = 9999)
              )
 
 pairwise.wilcox.test(
@@ -687,7 +696,6 @@ herb_grazing_pressure <-
   guides(fill = "none") +
   theme_bw() +
   labs(
-    title = "Herbivore Grazing Pressure",
     x = "Region",
     y = NULL
   )
@@ -702,7 +710,7 @@ bite_by_quadrat <- bite_by_quadrat %>%
 
 kruskal_test(total_bite_rate ~ Region, 
              data = bite_by_quadrat,
-             distribution = approximate(nresample = 9999)
+             distribution = coin::approximate(nresample = 9999)
              )
 
 pairwise.wilcox.test(
@@ -713,7 +721,7 @@ pairwise.wilcox.test(
 
 kruskal_test(event_rate ~ Region, 
              data = bite_by_quadrat,
-             distribution = approximate(nresample = 9999)
+             distribution = coin::approximate(nresample = 9999)
              )
 
 pairwise.wilcox.test(
@@ -739,11 +747,11 @@ bites_per_event <- herb_bite_positive %>%
   ))
 
 bites_per_event_plot <- 
-  ggplot(bites_per_event, aes(Region, value, fill = Region)) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red") +
+  ggplot(bites_per_event, aes(Region, value, color = Region)) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "point", color = "black") +
   stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.12) +
-  scale_fill_manual(values = region_color) +
+  scale_color_manual(values = region_color) +
   guides(fill = "none") +
   theme_bw() +
   labs(
@@ -761,7 +769,7 @@ herb_bite_positive <- herb_bite_positive %>%
 
 kruskal_test(mean_bites_per_event ~ Region, 
              data = herb_bite_positive,
-             distribution = approximate(nresample = 9999)
+             distribution = coin::approximate(nresample = 9999)
              )
 
 ## Bite per event adjust by nutrient----
@@ -992,14 +1000,14 @@ cor.test(NE_bpe_site$bpe_site_mean,
          NE_bpe_site$bulk_NP_ratio_adj,
          method = "spearman")
 
-# bpe site mean adj plot
+# bpe site mean adj plot----
 
 bpe_site_adj_plot <- 
-  ggplot(bpe_site_adj, aes(Region, value, fill = Region)) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red") +
+  ggplot(bpe_site_adj, aes(Region, value, color = Region)) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "point", color = "black") +
   stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.12) +
-  scale_fill_manual(values = region_color) +
+  scale_color_manual(values = region_color) +
   facet_wrap(~metric, scales = "free_y", nrow = 1) +
   guides(fill = "none") +
   theme_bw() +
@@ -1015,7 +1023,7 @@ bpe_site$log_bpe_site_mean <- log(bpe_site$bpe_site_mean)
 log_bpe_site_org <- bpe_site %>%
   select(log_bpe_site_mean, org_pct_mean, Region)
 
-# log bpe site mean vs. org
+# log bpe site mean vs. org----
   
 log_bpe_site_org_all_plot <- 
   ggplot(
@@ -1055,7 +1063,7 @@ log_bpe_site_org_plot <-
   theme_bw()
 log_bpe_site_org_plot
 
-# log bpe site mean vs. CNP ratio
+# log bpe site mean vs. CNP ratio----
 
 log_bpe_site_CNP_ratio <- bpe_site %>%
   select(
@@ -1110,10 +1118,17 @@ log_bpe_site_CNP_ratio_plot <-
     log_bpe_site_CNP_ratio,
     aes(x = Value, y = log_bpe_site_mean, color = Region)
   ) +
-  geom_point(size = 2) +
-  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  geom_point(
+    aes(color = Region,
+        size = Region)
+  ) +
   facet_wrap(~ Ratio, scales = "free_x") +
   scale_color_manual(values = region_color) +
+  scale_size_manual(
+    values = c("GI" = 1,
+               "XLQ" = 1,
+               "NE" = 3.5)
+  ) +
   labs(
     x = "Stoichiometric ratio",
     y = "Log bite per event site mean",
@@ -1121,3 +1136,207 @@ log_bpe_site_CNP_ratio_plot <-
   ) +
   theme_bw()
 log_bpe_site_CNP_ratio_plot
+
+# Mapping----
+
+sites <- read_excel("sites.xlsx")
+
+sites_sf <- st_as_sf(
+  sites,
+  coords = c("lon", "lat"),
+  crs = 4326,
+  remove = F
+)
+
+tw_county <- st_read("TW map/COUNTY_MOI_1140318.shp")
+tw_county <- st_transform(tw_county, 4326)
+
+taiwan <- tw_county %>%
+  summarise(geometry = st_union(geometry))
+
+extent_TW <- list(
+  xlim = c(119.8, 122.1),
+  ylim = c(21.7, 25.5)
+)
+
+extent_NE <- list(
+  xlim = c(121.77, 122.02),
+  ylim = c(24.99, 25.17)
+)
+
+extent_GI <- list(
+  xlim = c(121.45, 121.53),
+  ylim = c(22.62, 22.69)
+)
+
+extent_XLQ <- list(
+  xlim = c(120.34, 120.40),
+  ylim = c(22.31, 22.37)
+)
+
+boxes <- tibble(
+  region = c("NE", "GI", "XLQ"),
+  xmin = c(extent_NE$xlim[1], extent_GI$xlim[1], extent_XLQ$xlim[1]),
+  xmax = c(extent_NE$xlim[2], extent_GI$xlim[2], extent_XLQ$xlim[2]),
+  ymin = c(extent_NE$ylim[1], extent_GI$ylim[1], extent_XLQ$ylim[1]),
+  ymax = c(extent_NE$ylim[2], extent_GI$ylim[2], extent_XLQ$ylim[2])
+)
+
+p_main <- ggplot() +
+  geom_sf(
+    data = taiwan,
+    fill = "olivedrab3",
+    color = NA
+  ) +
+  geom_rect(
+    data = boxes,
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+    fill = NA,
+    color = "black",
+    linewidth = 0.6
+  ) +
+  annotate(
+    "text",
+    x = 121.57, y = 25.25,
+    label = "Northeast\n(NE)",
+    size = 5,
+    fontface = "bold"
+  ) +
+  annotate(
+    "text",
+    x = 121.5, y = 22.45,
+    label = "Green Island\n(GI)",
+    size = 5,
+    fontface = "bold"
+  ) +
+  annotate(
+    "text",
+    x = 120.30, y = 22.15,
+    label = "Xiaoliuqiu\n(XLQ)",
+    size = 5,
+    fontface = "bold"
+  ) +
+  annotation_scale(
+    location = "bl",
+    width_hint = 0.35,
+    text_cex = 0.8
+  ) +
+  annotation_north_arrow(
+    location = "tl",
+    which_north = "true",
+    style = north_arrow_fancy_orienteering,
+    height = unit(1.3, "cm"),
+    width = unit(1.3, "cm"),
+    pad_x = unit(0.5, "cm"),
+    pad_y = unit(0.5, "cm")
+  ) +
+  coord_sf(
+    xlim = extent_TW$xlim,
+    ylim = extent_TW$ylim,
+    expand = F
+  ) +
+  theme_bw(base_size = 13) +
+  theme(
+    panel.grid.major = element_line(color = "gray90", linewidth = 0.4),
+    panel.background = element_rect(fill = "white", color = NA),
+    axis.title = element_text(size = 15, color = "black"),
+    axis.text = element_text(size = 11, color = "black")
+  )
+
+make_inset_map <- function(region_name, xlim, ylim, scale_width = 0.35) {
+  
+  site_sub <- sites %>%
+    filter(region == region_name)
+  
+  site_sub_sf <- sites_sf %>%
+    filter(region == region_name)
+  
+  ggplot() +
+    geom_sf(
+      data = taiwan,
+      fill = "olivedrab3",
+      color = NA
+    ) +
+    geom_sf(
+      data = site_sub_sf,
+      color = "steelblue",
+      size = 2.5
+    ) +
+    geom_text_repel(
+      data = site_sub,
+      aes(x = lon, y = lat, label = site),
+      size = 3.7,
+      color = "black",
+      box.padding = 0.4,
+      point.padding = 0.3,
+      min.segment.length = 0,
+      segment.color = "grey40",
+      max.overlaps = Inf
+    ) +
+    annotation_scale(
+      location = "bl",
+      width_hint = scale_width,
+      text_cex = 0.7
+    ) +
+    coord_sf(
+      xlim = xlim,
+      ylim = ylim,
+      expand = F
+    ) +
+    theme_bw(base_size = 11) +
+    theme(
+      legend.position = "none",
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      panel.grid.major = element_line(color = "gray90", linewidth = 0.4),
+      panel.background = element_rect(fill = "white", color = NA),
+      plot.margin = margin(2, 2, 2, 2)
+    )
+}
+
+p_NE <- make_inset_map(
+  region_name = "NE",
+  xlim = extent_NE$xlim,
+  ylim = extent_NE$ylim,
+  scale_width = 0.5
+)
+
+p_GI <- make_inset_map(
+  region_name = "GI",
+  xlim = extent_GI$xlim,
+  ylim = extent_GI$ylim,
+  scale_width = 0.4
+)
+
+p_XLQ <- make_inset_map(
+  region_name = "XLQ",
+  xlim = extent_XLQ$xlim,
+  ylim = extent_XLQ$ylim,
+  scale_width = 0.35
+)
+
+right_col <- p_NE / p_GI / p_XLQ
+
+final_map <- ggdraw() +
+  draw_plot(
+    p_main,
+    x = 0.00, y = 0.00,
+    width = 0.60, height = 1.00
+  ) +
+  draw_plot(
+    right_col,
+    x = 0.48, y = 0.03,
+    width = 0.43, height = 0.97
+  )
+
+final_map
+
+ggsave(
+  filename = "sampling_site_map.png",
+  plot = final_map,
+  width = 10,
+  height = 8,
+  dpi = 600
+)
+
