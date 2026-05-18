@@ -1,4 +1,4 @@
-# Result
+# Field work analysis
 
 setwd("C:/Users/dan91/OneDrive/桌面/Field work")
 library(tidyverse)
@@ -21,12 +21,12 @@ library(ggrepel)
 library(ragg)
 library(cowplot)
 
-# import data----
+# Import data----
 sed <- read_excel("CNP_data.xlsx", sheet = "sediment", na = "NA")
 P <- read_excel("CNP_data.xlsx", sheet = "P", na = "NA")
 IO <- read_excel("CNP_data.xlsx", sheet = "Inorganic vs. Organic", na = "NA")
 
-# Sediment across region----
+# Sediment weight across regions----
 
 sed <- sed %>% 
   rename(
@@ -114,7 +114,7 @@ sed_region <-
 sed_region
 
 
-# Sea urchins----
+# Sea urchin density and composition----
 
 XLQ_ur <- read_excel("urchin density.xlsx", sheet = "XLQ") %>% 
   mutate(Region = "XLQ")
@@ -192,7 +192,7 @@ kruskal_test(
   density ~ Region, 
   data = urchin_density,
   distribution = coin::approximate(nresample = 9999)
-  )
+)
 
 pairwise.wilcox.test(
   x = urchin_density$density,
@@ -224,7 +224,7 @@ urchin_plot
 
 urchin_plot | herb_urchin_sum_region
 
-# Nutrient concentration across region----
+# Nutrient concentration and stoichiometric ratios----
 
 P_site_mean <- P %>% 
   group_by(Region, site) %>%
@@ -359,7 +359,7 @@ CNP_site_mean_adj_2 <- CNP_site_mean_adj_2 %>%
 kruskal_test(bulk_C_mgg_adj_mean ~ Region, 
              data = CNP_site_mean_adj_2,
              distribution = coin::approximate(nresample = 9999)
-             )
+)
 
 pairwise.wilcox.test(
   CNP_site_mean_adj_2$bulk_C_mgg_adj_mean,
@@ -370,7 +370,7 @@ pairwise.wilcox.test(
 kruskal_test(bulk_N_mgg_adj_mean ~ Region, 
              data = CNP_site_mean_adj_2,
              distribution = coin::approximate(nresample = 9999)
-             )
+)
 
 pairwise.wilcox.test(
   CNP_site_mean_adj_2$bulk_N_mgg_adj_mean,
@@ -381,7 +381,7 @@ pairwise.wilcox.test(
 kruskal_test(bulk_P_mgg_mean ~ Region, 
              data = CNP_site_mean_adj_2,
              distribution = coin::approximate(nresample = 9999)
-             )
+)
 
 pairwise.wilcox.test(
   CNP_site_mean_adj_2$bulk_P_mgg_mean,
@@ -392,17 +392,17 @@ pairwise.wilcox.test(
 kruskal_test(bulk_CN_ratio_adj ~ Region, 
              data = CNP_site_mean_adj_2,
              distribution = coin::approximate(nresample = 9999)
-             )
+)
 
 kruskal_test(bulk_CP_ratio_adj ~ Region, 
              data = CNP_site_mean_adj_2,
              distribution = coin::approximate(nresample = 9999)
-             )
+)
 
 kruskal_test(bulk_NP_ratio_adj ~ Region, 
              data = CNP_site_mean_adj_2,
              distribution = coin::approximate(nresample = 9999)
-             )
+)
 
 ## bulk only plot----
 
@@ -435,7 +435,6 @@ p1 <- ggplot(p1_data, aes(x = Region, y = value, fill = Region)) +
     x = NULL,
     y = "Concentration (mg/g)"
   )
-p1
 
 p2_data <- CNP_site_mean_adj_2 %>%
   select(
@@ -466,11 +465,9 @@ p2 <- ggplot(p2_data, aes(x = Region, y = value, fill = Region)) +
     x = "Region",
     y = "Molar ratio"
   )
-p2
-
 p1/p2
 
-## IO across region----
+# Organic, inorganic, and salt fractions across regions----
 
 IO_site <- IO %>%
   group_by(Region, site) %>%
@@ -531,7 +528,7 @@ IO_site <- IO_site %>%
 kruskal_test(org_pct ~ Region, 
              data = IO_site,
              distribution = coin::approximate(nresample = 9999)
-             )
+)
 
 pairwise.wilcox.test(
   IO_site$org_pct,
@@ -539,7 +536,7 @@ pairwise.wilcox.test(
   p.adjust.method = "BH"
 )
 
-# Fish bites----
+# Fish bite data----
 
 bite <- read_excel("Fish bite_data.xlsx")
 
@@ -552,7 +549,7 @@ bite <- bite %>%
            "Herbivore", "Benthic invertivore", "Corallivore", "Omnivore"
          ))
 
-## bite rate of different trophic groups----
+# Bite rate by trophic group----
 bite_quad_trophic <- bite %>%
   group_by(Region, site, Camera, `trophic group`) %>%
   summarise(
@@ -589,7 +586,7 @@ trophic_region <-
   )
 trophic_region
 
-## bite rate of different herbivore functional groups----
+# Bite rate by herbivore functional group----
 
 bite_quad_func <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
@@ -628,7 +625,8 @@ herb_func_region <-
   )
 herb_func_region
 
-## Bite rate by quadrat----
+# Quadrat-level grazing pressure----
+# Retained for total bite rate and event rate only
 
 bite_by_quadrat <- bite %>%
   filter(`trophic group` == "Herbivore") %>%
@@ -655,7 +653,7 @@ bite_by_quadrat <- bite_by_quadrat %>%
     event_rate = n_events * 60 / duration
   )
 
-## 1.  occurrence of herbivore feeding----
+# Occurrence of herbivore feeding----
 
 camera_zero_summary <- bite_by_quadrat %>%
   mutate(has_herbivore = n_events > 0) %>%
@@ -680,7 +678,7 @@ ggplot(camera_zero_summary, aes(x = Region, y = prop_with_herbivore, fill = Regi
     title = "Occurrence of herbivore feeding among regions"
   )
 
-## 2.  Herbivore grazing pressure (total bite rate/event rate/bite per event)----
+# Herbivore grazing pressure: total bite rate and event rate
 
 bite_herb_all <- bite_by_quadrat %>%
   select(Region, total_bite_rate, event_rate) %>%
@@ -720,7 +718,7 @@ bite_by_quadrat <- bite_by_quadrat %>%
 kruskal_test(total_bite_rate ~ Region, 
              data = bite_by_quadrat,
              distribution = coin::approximate(nresample = 9999)
-             )
+)
 
 pairwise.wilcox.test(
   bite_by_quadrat$total_bite_rate,
@@ -731,7 +729,7 @@ pairwise.wilcox.test(
 kruskal_test(event_rate ~ Region, 
              data = bite_by_quadrat,
              distribution = coin::approximate(nresample = 9999)
-             )
+)
 
 pairwise.wilcox.test(
   bite_by_quadrat$event_rate,
@@ -779,9 +777,10 @@ herb_bite_positive <- herb_bite_positive %>%
 kruskal_test(mean_bites_per_event ~ Region, 
              data = herb_bite_positive,
              distribution = coin::approximate(nresample = 9999)
-             )
+)
 
-## Bite per event adjust by nutrient----
+
+# Site-level organic matter data for BPE analysis----
 
 IO_site_mean <- IO %>%
   group_by(Region, site) %>%
@@ -795,147 +794,8 @@ IO_site_mean <- IO %>%
     .groups = "drop"
   )
 
-herb_bite_positive <- herb_bite_positive %>%
-  left_join(
-    IO_site_mean, 
-    by = c("Region", "site")) %>%
-  left_join(
-    CNP_site_mean_adj_2, 
-    by = c("Region", "site")) %>%
-  mutate(
-    bites_per_event_org_adj = mean_bites_per_event / org_g_mean,
-    bites_per_event_CN_adj = mean_bites_per_event / bulk_CN_ratio_adj,
-    bites_per_event_CP_adj = mean_bites_per_event / bulk_CP_ratio_adj,
-    bites_per_event_NP_adj = mean_bites_per_event / bulk_NP_ratio_adj
-  )
-
-# Long format for plotting
-
-bite_per_event_adj <- herb_bite_positive %>%
-  select(
-    Region,
-    bites_per_event_org_adj,
-    bites_per_event_CN_adj,
-    bites_per_event_CP_adj,
-    bites_per_event_NP_adj
-  ) %>%
-  pivot_longer(
-    cols = c(
-      bites_per_event_org_adj,
-      bites_per_event_CN_adj,
-      bites_per_event_CP_adj,
-      bites_per_event_NP_adj
-    ),
-    names_to = "metric",
-    values_to = "value"
-  ) %>%
-  mutate(
-    metric = factor(
-      metric,
-      levels = c(
-        "bites_per_event_org_adj",
-        "bites_per_event_CN_adj",
-        "bites_per_event_CP_adj",
-        "bites_per_event_NP_adj"
-      ),
-      labels = c(
-        "adjusted by organic matter",
-        "adjusted by C:N",
-        "adjusted by C:P",
-        "adjusted by N:P"
-      )
-    )
-  )
-
-# Plot
-
-bite_per_event_adj_plot <- 
-  ggplot(bite_per_event_adj, aes(Region, value, fill = Region)) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red") +
-  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.12) +
-  scale_fill_manual(values = region_color) +
-  facet_wrap(~metric, scales = "free_y", nrow = 1) +
-  guides(fill = "none") +
-  theme_bw() +
-  labs(
-    title = "Bites per event adjusted by nutrient quality",
-    x = "Region",
-    y = NULL
-  )
-
-bite_per_event_adj_plot
-
-## correlation of nutritional quality and bite per event----
-
-cor.test(herb_bite_positive$mean_bites_per_event,
-         herb_bite_positive$org_pct_mean,
-         method = "spearman")
-
-cor.test(herb_bite_positive$mean_bites_per_event,
-         herb_bite_positive$bulk_CN_ratio_adj,
-         method = "spearman")
-
-cor.test(herb_bite_positive$mean_bites_per_event,
-         herb_bite_positive$bulk_CP_ratio_adj,
-         method = "spearman")
-
-cor.test(herb_bite_positive$mean_bites_per_event,
-         herb_bite_positive$bulk_NP_ratio_adj,
-         method = "spearman")
-
-bite_vs_ratio <- herb_bite_positive %>%
-  select(mean_bites_per_event, bulk_CN_ratio_adj, bulk_CP_ratio_adj, bulk_NP_ratio_adj, Region) %>%
-  pivot_longer(
-    cols = c(bulk_CN_ratio_adj, bulk_CP_ratio_adj, bulk_NP_ratio_adj),
-    names_to = "Ratio",
-    values_to = "Value"
-  )
-
-bite_vs_ratio$Ratio <- recode(bite_vs_ratio$Ratio,
-                          "bulk_CP_ratio_adj" = "C:P ratio",
-                          "bulk_NP_ratio_adj" = "N:P ratio",
-                          "bulk_CN_ratio_adj" = "C:N ratio")
-
-bite_vs_ratio_plot <- 
-  ggplot(bite_vs_ratio, aes(x = Value, y = mean_bites_per_event, color = Region)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE) +
-  facet_wrap(~ Ratio, scales = "free_x") +
-  scale_color_manual(values = region_color) +
-  labs(
-    x = "Stoichiometric ratio",
-    y = "Bite per event",
-    color = "Region"
-  ) +
-  theme_bw()
-bite_vs_ratio_plot
-
-NE_bite_per_event <- herb_bite_positive %>%
-  filter(Region == "NE")
-
-cor.test(NE_bite_per_event$mean_bites_per_event,
-         NE_bite_per_event$bulk_CN_ratio_adj,
-         method = "spearman")
-
-cor.test(NE_bite_per_event$mean_bites_per_event,
-         NE_bite_per_event$bulk_CP_ratio_adj,
-         method = "spearman")
-
-cor.test(NE_bite_per_event$mean_bites_per_event,
-         NE_bite_per_event$bulk_NP_ratio_adj,
-         method = "spearman")
-
-GI_bite_per_event <- herb_bite_positive %>%
-  filter(Region == "GI")
-
-cor.test(GI_bite_per_event$mean_bites_per_event,
-         GI_bite_per_event$bulk_CN_ratio_adj,
-         method = "spearman")
-
-herb_bite_positive$log_bpe <- log(herb_bite_positive$mean_bites_per_event)
-
-# change bite per event into site-level----
+# Site-level bites per event
+# BPE is retained only at site level in this cleaned version
 
 bpe_site <- bite_by_quadrat %>%
   filter(n_events > 0) %>%
@@ -953,6 +813,26 @@ bpe_site <- bite_by_quadrat %>%
     bites_per_event_CP_adj = bpe_site_mean / bulk_CP_ratio_adj,
     bites_per_event_NP_adj = bpe_site_mean / bulk_NP_ratio_adj
   )
+
+# Statistical test for site-level BPE among regions
+bpe_site <- bpe_site %>%
+  mutate(
+    Region = as.factor(Region),
+    bpe_site_mean = as.numeric(bpe_site_mean)
+  )
+
+kruskal_test(
+  bpe_site_mean ~ Region,
+  data = bpe_site,
+  distribution = coin::approximate(nresample = 9999)
+)
+
+pairwise.wilcox.test(
+  bpe_site$bpe_site_mean,
+  bpe_site$Region,
+  p.adjust.method = "BH"
+)
+
 
 bpe_site_adj <- bpe_site %>%
   select(
@@ -1009,7 +889,7 @@ cor.test(NE_bpe_site$bpe_site_mean,
          NE_bpe_site$bulk_NP_ratio_adj,
          method = "spearman")
 
-# bpe site mean adj plot----
+# Site-level BPE adjusted by nutrient quality----
 
 bpe_site_adj_plot <- 
   ggplot(bpe_site_adj, aes(Region, value, color = Region)) +
@@ -1032,51 +912,12 @@ bpe_site$log_bpe_site_mean <- log(bpe_site$bpe_site_mean)
 log_bpe_site_org <- bpe_site %>%
   select(log_bpe_site_mean, org_pct_mean, Region)
 
-# log bpe site mean vs. org----
-  
-log_bpe_site_org_all_plot <- 
-  ggplot(
-    log_bpe_site_org,
-    aes(x = org_pct_mean, y = log_bpe_site_mean)
-  ) +
-  geom_point(aes(color = Region), size = 2) +
-  geom_smooth(
-    aes(group = 1),
-    method = "lm",
-    se = FALSE,
-    linewidth = 0.8,
-    colour = "grey40"
-  ) +
-  scale_color_manual(values = region_color) +
-  labs(
-    x = "Organic matter percentage",
-    y = "Log bite per event site mean",
-    color = "Region"
-  ) +
-  theme_bw()
-log_bpe_site_org_all_plot
-
-log_bpe_site_org_plot <- 
-  ggplot(
-    log_bpe_site_org,
-    aes(x = org_pct_mean, y = log_bpe_site_mean, color = Region)
-  ) +
-  geom_point(size = 2) +
-  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
-  scale_color_manual(values = region_color) +
-  labs(
-    x = "Organic matter percentage",
-    y = "Log bite per event site mean",
-    color = "Region"
-  ) +
-  theme_bw()
-log_bpe_site_org_plot
-
-# log bpe site mean vs. CNP ratio----
+# Site-level log BPE vs stoichiometric ratios----
 
 log_bpe_site_CNP_ratio <- bpe_site %>%
   select(
     log_bpe_site_mean,
+    org_pct_mean,
     bulk_CN_ratio_adj,
     bulk_CP_ratio_adj,
     bulk_NP_ratio_adj,
@@ -1084,43 +925,33 @@ log_bpe_site_CNP_ratio <- bpe_site %>%
   ) %>%
   pivot_longer(
     cols = c(
+      org_pct_mean,
       bulk_CN_ratio_adj,
       bulk_CP_ratio_adj,
       bulk_NP_ratio_adj
     ),
     names_to = "Ratio",
     values_to = "Value"
+  ) %>%
+  mutate(
+    Ratio = recode(
+      Ratio,
+      "org_pct_mean" = "organic matter",
+      "bulk_CN_ratio_adj" = "C:N ratio",
+      "bulk_CP_ratio_adj" = "C:P ratio",
+      "bulk_NP_ratio_adj" = "N:P ratio"
+    ),
+    Ratio = factor(
+      Ratio,
+      levels = c(
+        "organic matter",
+        "C:N ratio",
+        "C:P ratio",
+        "N:P ratio"
+      )
+    )
   )
 
-log_bpe_site_CNP_ratio$Ratio <- recode(
-  log_bpe_site_CNP_ratio$Ratio,
-  "bulk_CN_ratio_adj" = "C:N ratio",
-  "bulk_CP_ratio_adj" = "C:P ratio",
-  "bulk_NP_ratio_adj" = "N:P ratio"
-)
-
-log_bpe_site_CNP_ratio_all_plot <- 
-  ggplot(
-    log_bpe_site_CNP_ratio,
-    aes(x = Value, y = log_bpe_site_mean)
-  ) +
-  geom_point(aes(color = Region), size = 2) +
-  geom_smooth(
-    aes(group = 1),
-    method = "lm",
-    se = FALSE,
-    linewidth = 0.8,
-    colour = "grey40"
-  ) +
-  facet_wrap(~ Ratio, scales = "free_x") +
-  scale_color_manual(values = region_color) +
-  labs(
-    x = "Stoichiometric ratio",
-    y = "Log bite per event site mean",
-    color = "Region"
-  ) +
-  theme_bw()
-log_bpe_site_CNP_ratio_all_plot
 
 log_bpe_site_CNP_ratio_plot <- 
   ggplot(
@@ -1128,10 +959,9 @@ log_bpe_site_CNP_ratio_plot <-
     aes(x = Value, y = log_bpe_site_mean, color = Region)
   ) +
   geom_point(
-    aes(color = Region,
-        size = Region)
+    aes(size = Region)
   ) +
-  facet_wrap(~ Ratio, scales = "free_x") +
+  facet_wrap(~ Ratio, scales = "free_x", ncol = 2) +
   scale_color_manual(values = region_color) +
   scale_size_manual(
     values = c("GI" = 1,
@@ -1139,14 +969,14 @@ log_bpe_site_CNP_ratio_plot <-
                "NE" = 3.5)
   ) +
   labs(
-    x = "Stoichiometric ratio",
-    y = "Log bite per event site mean",
-    color = "Region"
+    y = "site mean bite per event log-transformed",
+    color = "Region",
+    size = "Region"
   ) +
   theme_bw()
 log_bpe_site_CNP_ratio_plot
 
-# Mapping----
+# Sampling site map----
 
 sites <- read_excel("sites.xlsx")
 
@@ -1335,17 +1165,9 @@ final_map <- ggdraw() +
   ) +
   draw_plot(
     right_col,
-    x = 0.48, y = 0.03,
+    x = 0.54, y = 0.03,
     width = 0.43, height = 0.97
   )
 
 final_map
-
-ggsave(
-  filename = "sampling_site_map.png",
-  plot = final_map,
-  width = 10,
-  height = 8,
-  dpi = 600
-)
 
