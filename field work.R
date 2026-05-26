@@ -157,8 +157,6 @@ herb_urchin_sum_region <-
   theme_bw() +
   labs(x = "Region", y = "Total number of urchins", fill = "Genus")
 
-herb_urchin_sum_region
-
 all_samples <- urchin_all %>%
   distinct(Region, Site)
 
@@ -167,10 +165,9 @@ urchin_density <- herb_urchin %>%
   right_join(all_samples, by = c("Region", "Site")) %>%
   mutate(
     count = replace_na(count, 0),
-    density = count / 10
+    density = count / 5
   ) %>%
   arrange(Region, Site)
-urchin_density
 
 urchin_summary <- urchin_density %>%
   group_by(Region) %>%
@@ -180,7 +177,6 @@ urchin_summary <- urchin_density %>%
     n = n(),
     .groups = "drop"
   )
-urchin_summary
 
 urchin_density <- urchin_density %>%
   mutate(
@@ -218,9 +214,8 @@ urchin_plot <-
   theme_bw() +
   labs(
     x = NULL,
-    y = expression("Density (ind m"^{-2}*")")
+    y = expression("Density (ind./10m"^{2}*")")
   )
-urchin_plot
 
 urchin_plot | herb_urchin_sum_region
 
@@ -1021,6 +1016,24 @@ boxes <- tibble(
   ymax = c(extent_NE$ylim[2], extent_GI$ylim[2], extent_XLQ$ylim[2])
 )
 
+add_panel_label <- function(plot, label, extent, dx = 0.03, dy = 0.03) {
+  
+  x_pos <- extent$xlim[2] - diff(extent$xlim) * dx
+  y_pos <- extent$ylim[2] - diff(extent$ylim) * dy
+  
+  plot +
+    annotate(
+      "text",
+      x = x_pos,
+      y = y_pos,
+      label = label,
+      fontface = "bold",
+      size = 5,
+      hjust = 1,
+      vjust = 1
+    )
+}
+
 p_main <- ggplot() +
   geom_sf(
     data = taiwan,
@@ -1036,7 +1049,7 @@ p_main <- ggplot() +
   ) +
   annotate(
     "text",
-    x = 121.57, y = 25.25,
+    x = 121.4, y = 25.15,
     label = "Northeast\n(NE)",
     size = 5,
     fontface = "bold"
@@ -1154,6 +1167,11 @@ p_XLQ <- make_inset_map(
   ylim = extent_XLQ$ylim,
   scale_width = 0.35
 )
+
+p_main <- add_panel_label(p_main, "a", extent_TW)
+p_NE   <- add_panel_label(p_NE,   "b", extent_NE)
+p_GI   <- add_panel_label(p_GI,   "c", extent_GI)
+p_XLQ  <- add_panel_label(p_XLQ,  "d", extent_XLQ)
 
 right_col <- p_NE / p_GI / p_XLQ
 
