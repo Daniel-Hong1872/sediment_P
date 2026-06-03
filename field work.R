@@ -64,9 +64,8 @@ IO <- IO %>%
     salt_g = tube + subsample - wo_salt,
     inorg_g = tube_inorg - tube,
     org_g = wo_salt - tube_inorg,
-    salt_pct = salt_g  / subsample * 100,
-    inorg_pct = inorg_g / subsample * 100,
-    org_pct = org_g   / subsample * 100
+    inorg_pct = inorg_g / (inorg_g + org_g) * 100,
+    org_pct = org_g   / (inorg_g + org_g) * 100
   )
 
 # setup region color
@@ -469,22 +468,20 @@ IO_site <- IO %>%
   summarise(
     org_pct = mean(org_pct, na.rm = T),
     inorg_pct = mean(inorg_pct, na.rm = T),
-    salt_pct = mean(salt_pct, na.rm = T),
     .groups = "drop"
   )
 
 IO_site_long <- IO_site %>%
-  select(Region, site, org_pct, inorg_pct, salt_pct) %>%
+  select(Region, site, org_pct, inorg_pct) %>%
   pivot_longer(
-    cols = c(org_pct, inorg_pct, salt_pct), 
+    cols = c(org_pct, inorg_pct), 
     names_to = "component",
     values_to = "percentage"
   )
 
 sediment_color <- c(
   "org_pct" = "#FFBB39",
-  "inorg_pct" = "#6FA8DC",
-  "salt_pct" = "#999999"
+  "inorg_pct" = "#6FA8DC"
 )
 
 IO_pct <- 
@@ -501,8 +498,7 @@ IO_pct <-
     values = sediment_color,
     labels = c(
       "org_pct" = "Organic matter",
-      "inorg_pct" = "Inorganic matter",
-      "salt_pct" = "Salt"
+      "inorg_pct" = "Inorganic matter"
     )) +
   theme_bw()+
   theme(
@@ -893,8 +889,8 @@ bpe_site_adj_plot <-
   stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.12) +
   scale_color_manual(values = region_color) +
   facet_wrap(~metric, scales = "free_y", nrow = 1) +
-  guides(fill = "none") +
   theme_bw() +
+  theme(legend.position = "none") +
   labs(
     title = "Bites per event site mean adjusted by nutrient quality",
     x = "Region",
@@ -1189,3 +1185,66 @@ final_map <- ggdraw() +
 
 final_map
 
+# Additional figure:----
+# Site-mean total bite rate and feeding event rate
+
+bite_site_mean <- bite_by_quadrat %>%
+  group_by(Region, site) %>%
+  summarise(
+    total_bite_rate_site_mean = mean(total_bite_rate, na.rm = TRUE),
+    event_rate_site_mean = mean(event_rate, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+bite_site_mean_long <- bite_site_mean %>%
+  pivot_longer(
+    cols = c(total_bite_rate_site_mean, event_rate_site_mean),
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(
+    metric = factor(
+      metric,
+      levels = c("total_bite_rate_site_mean", "event_rate_site_mean"),
+      labels = c("Total bite rate\n(bites/hr)",
+                 "Feeding event rate\n(events/hr)")
+    )
+  )
+
+site_mean_grazing_pressure <- 
+  ggplot(bite_site_mean_long, aes(Region, value, fill = Region)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", color = "red") +
+  scale_fill_manual(values = region_color) +
+  facet_wrap(~metric, scales = "free_y", nrow = 1) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = NULL
+  )
+
+site_mean_grazing_pressure
+
+kruskal_test(total_bite_rate_site_mean ~ Region, 
+             data = bite_site_mean,
+             distribution = coin::approximate(nresample = 9999)
+)
+
+pairwise.wilcox.test(
+  bite_site_mean$total_bite_rate_site_mean,
+  bite_site_mean$Region,
+  p.adjust.method = "BH"
+)
+
+kruskal_test(event_rate_site_mean ~ Region, 
+             data = bite_site_mean,
+             distribution = coin::approximate(nresample = 9999)
+)
+
+pairwise.wilcox.test(
+  bite_site_mean$event_rate_site_mean,
+  bite_site_mean$Region,
+  p.adjust.method = "BH"
+)
