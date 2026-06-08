@@ -805,6 +805,58 @@ bpe_site <- bite_by_quadrat %>%
     bites_per_event_NP_adj = bpe_site_mean / bulk_NP_ratio_adj
   )
 
+bpe_long <- bpe_site %>%
+  select(Region, bpe_site_mean) %>%
+  pivot_longer(
+    cols = c(bpe_site_mean),
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(metric = factor(
+    metric, levels = c("bpe_site_mean")
+  ))
+
+bpe_long_wo_XLQ <- bpe_long %>%
+  group_by(Region, metric) %>%
+  filter(n() >= 2) %>%
+  ungroup()
+
+bpe_site_plot <- 
+  ggplot(bpe_long, aes(Region, value)) +
+  geom_jitter(
+    aes(fill = Region),
+    width = 0.15,
+    size = 2.5,
+    alpha = 0.8,
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
+  stat_summary(
+    data = bpe_long_wo_XLQ,
+    fun = mean, 
+    geom = "point", 
+    size = 2,
+    color = "black"
+    ) +
+  stat_summary(
+    data = bpe_long_wo_XLQ,
+    aes(color = Region),
+    fun.data = mean_cl_normal, 
+    geom = "errorbar", 
+    width = 0.12
+    ) +
+  scale_fill_manual(values = region_color) +
+  scale_color_manual(values = region_color) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  labs(
+    tag = "(c)",
+    x = "Region",
+    y = expression("Bites per event (bites "*event^-1*")")
+  )
+bpe_site_plot
+
 # Statistical test for site-level BPE among regions
 bpe_site <- bpe_site %>%
   mutate(
@@ -1164,10 +1216,10 @@ p_XLQ <- make_inset_map(
   scale_width = 0.35
 )
 
-p_main <- add_panel_label(p_main, "a", extent_TW)
-p_NE   <- add_panel_label(p_NE,   "b", extent_NE)
-p_GI   <- add_panel_label(p_GI,   "c", extent_GI)
-p_XLQ  <- add_panel_label(p_XLQ,  "d", extent_XLQ)
+p_main <- add_panel_label(p_main, "(a)", extent_TW)
+p_NE   <- add_panel_label(p_NE,   "(b)", extent_NE)
+p_GI   <- add_panel_label(p_GI,   "(c)", extent_GI)
+p_XLQ  <- add_panel_label(p_XLQ,  "(d)", extent_XLQ)
 
 right_col <- p_NE / p_GI / p_XLQ
 
@@ -1188,6 +1240,7 @@ final_map
 # Additional figure:----
 # Site-mean total bite rate and feeding event rate
 
+# site-level mean data
 bite_site_mean <- bite_by_quadrat %>%
   group_by(Region, site) %>%
   summarise(
@@ -1196,34 +1249,78 @@ bite_site_mean <- bite_by_quadrat %>%
     .groups = "drop"
   )
 
-bite_site_mean_long <- bite_site_mean %>%
-  pivot_longer(
-    cols = c(total_bite_rate_site_mean, event_rate_site_mean),
-    names_to = "metric",
-    values_to = "value"
-  ) %>%
-  mutate(
-    metric = factor(
-      metric,
-      levels = c("total_bite_rate_site_mean", "event_rate_site_mean"),
-      labels = c("Total bite rate\n(bites/hr)",
-                 "Feeding event rate\n(events/hr)")
-    )
+# (a) Total bite rate
+total_bite_plot <- 
+  ggplot(bite_site_mean, aes(x = Region, y = total_bite_rate_site_mean)) +
+  geom_boxplot(
+    aes(fill = Region),
+    outlier.shape = NA,
+    alpha = 0.45
+  ) +
+  geom_jitter(
+    aes(fill = Region),
+    width = 0.15,
+    size = 2.5,
+    alpha = 0.8,
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    color = "black",
+    size = 2
+  ) +
+  scale_fill_manual(values = region_color) +
+  theme_bw()+
+  theme(
+    legend.position = "none",
+    plot.tag = element_text(size = 12)
+  ) +
+  labs(
+    tag = "(a)",
+    x = "Region",
+    y = expression("Total bite rate (bites " * m^-2 * " " * h^-1 * ")")
   )
 
-site_mean_grazing_pressure <- 
-  ggplot(bite_site_mean_long, aes(Region, value, fill = Region)) +
-  geom_boxplot(outlier.shape = NA) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.6) +
-  stat_summary(fun = mean, geom = "point", color = "red") +
+# (b) Feeding event rate
+event_rate_plot <- 
+  ggplot(bite_site_mean, aes(x = Region, y = event_rate_site_mean)) +
+  geom_boxplot(
+    aes(fill = Region),
+    outlier.shape = NA,
+    alpha = 0.45
+  ) +
+  geom_jitter(
+    aes(fill = Region),
+    width = 0.15,
+    size = 2.5,
+    alpha = 0.8,
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    color = "black",
+    size = 2
+  ) +
   scale_fill_manual(values = region_color) +
-  facet_wrap(~metric, scales = "free_y", nrow = 1) +
-  guides(fill = "none") +
   theme_bw() +
+  theme(
+    legend.position = "none",
+    plot.tag = element_text(size = 12)
+  ) +
   labs(
+    tag = "(b)",
     x = "Region",
-    y = NULL
+    y = expression("Feeding event rate (events " * m^-2 * " " * h^-1 * ")")
   )
+
+# Combine plots
+site_mean_grazing_pressure <- total_bite_plot + event_rate_plot + bpe_site_plot
 
 site_mean_grazing_pressure
 
