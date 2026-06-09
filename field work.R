@@ -154,7 +154,16 @@ herb_urchin_sum_region <-
     drop = FALSE
   ) +
   theme_bw() +
-  labs(x = "Region", y = "Total number of urchins", fill = "Genus")
+  theme(
+    legend.position = c(0.03, 0.97),
+    legend.justification = c(0, 1)
+  ) +
+  labs(
+    tag = "(b)",
+    x = "Region", 
+    y = "Total number of urchins", 
+    fill = "Genus"
+    )
 
 all_samples <- urchin_all %>%
   distinct(Region, Site)
@@ -212,8 +221,9 @@ urchin_plot <-
   guides(color = "none") +
   theme_bw() +
   labs(
-    x = NULL,
-    y = expression("Density (ind./10m"^{2}*")")
+    tag = "(a)",
+    x = "Region",
+    y = expression("Density (ind. 10m"^{-2}*")")
   )
 
 urchin_plot | herb_urchin_sum_region
@@ -413,20 +423,36 @@ p1_data <- CNP_site_mean_adj_2 %>%
     values_to = "value"
   )
 
-p1 <- ggplot(p1_data, aes(x = Region, y = value, fill = Region)) +
-  geom_boxplot(outlier.shape = NA) +
-  geom_jitter(width = 0.15, alpha = 0.8) +
+p1 <- ggplot(p1_data, aes(x = Region, y = value)) +
+  geom_boxplot(
+    aes(fill = Region),
+    outlier.shape = NA,
+    alpha = 0.45,
+    color = "black"
+  ) +
+  geom_jitter(
+    aes(fill = Region),
+    size = 2.2,
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
   scale_fill_manual(values = region_color) +
   guides(fill = "none") +
-  facet_wrap(~ variable, scales = "free_y", ncol = 3,
-             labeller = as_labeller(c(
-               "bulk_C_mgg_adj_mean" = "Carbon (mg g⁻¹)",
-               "bulk_N_mgg_adj_mean" = "Nitrogen (mg g⁻¹)",
-               "bulk_P_mgg_mean"     = "Phosphorus (mg g⁻¹)"
-             ))) +
+  facet_wrap(
+    ~ variable, 
+    scales = "free_y", 
+    ncol = 3,
+    labeller = as_labeller(c(
+      "bulk_C_mgg_adj_mean" = "Carbon (mg g⁻¹)",
+      "bulk_N_mgg_adj_mean" = "Nitrogen (mg g⁻¹)",
+      "bulk_P_mgg_mean"     = "Phosphorus (mg g⁻¹)"
+    ))
+  ) +
   theme_bw() +
   labs(
-    x = NULL,
+    tag = "(a)",
+    x = "Region",
     y = "Concentration (mg/g)"
   )
 
@@ -443,19 +469,35 @@ p2_data <- CNP_site_mean_adj_2 %>%
     values_to = "value"
   )
 
-p2 <- ggplot(p2_data, aes(x = Region, y = value, fill = Region)) +
-  geom_boxplot(outlier.shape = NA) +
-  geom_jitter(width = 0.15, alpha = 0.8) +
+p2 <- ggplot(p2_data, aes(x = Region, y = value)) +
+  geom_boxplot(
+    aes(fill = Region),
+    outlier.shape = NA,
+    alpha = 0.45,
+    color = "black"
+  ) +
+  geom_jitter(
+    aes(fill = Region),
+    size = 2.2,
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
   scale_fill_manual(values = region_color) +
   guides(fill = "none") +
-  facet_wrap(~ variable, scales = "free_y", ncol = 3,
-             labeller = as_labeller(c(
-               "bulk_CN_ratio_adj" = "C:N ratio",
-               "bulk_CP_ratio_adj" = "C:P ratio",
-               "bulk_NP_ratio_adj" = "N:P ratio"
-             ))) +
+  facet_wrap(
+    ~ variable, 
+    scales = "free_y", 
+    ncol = 3,
+    labeller = as_labeller(c(
+      "bulk_CN_ratio_adj" = "C:N ratio",
+      "bulk_CP_ratio_adj" = "C:P ratio",
+      "bulk_NP_ratio_adj" = "N:P ratio"
+    ))
+  ) +
   theme_bw() +
   labs(
+    tag = "(b)",
     x = "Region",
     y = "Molar ratio"
   )
@@ -934,17 +976,42 @@ cor.test(NE_bpe_site$bpe_site_mean,
 
 # Site-level BPE adjusted by nutrient quality----
 
+bpe_site_adj_summary <- bpe_site_adj %>%
+  group_by(metric, Region) %>%
+  filter(n() >= 2) %>%
+  ungroup()
+
 bpe_site_adj_plot <- 
-  ggplot(bpe_site_adj, aes(Region, value, color = Region)) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.8) +
-  stat_summary(fun = mean, geom = "point", color = "black") +
-  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.12) +
+  ggplot(bpe_site_adj, aes(Region, value)) +
+  geom_jitter(
+    aes(fill = Region),
+    width = 0.15, 
+    size = 2.5, 
+    alpha = 0.8,
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
+  stat_summary(
+    data = bpe_site_adj_summary,
+    fun = mean, 
+    geom = "point", 
+    size = 2,
+    color = "black"
+  ) +
+  stat_summary(
+    data = bpe_site_adj_summary,
+    aes(color = Region),
+    fun.data = mean_cl_normal, 
+    geom = "errorbar", 
+    width = 0.12
+  ) +
+  scale_fill_manual(values = region_color) +
   scale_color_manual(values = region_color) +
   facet_wrap(~metric, scales = "free_y", nrow = 1) +
   theme_bw() +
   theme(legend.position = "none") +
   labs(
-    title = "Bites per event site mean adjusted by nutrient quality",
     x = "Region",
     y = NULL
   )
