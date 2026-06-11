@@ -820,10 +820,8 @@ IO_site_mean <- IO %>%
   summarise(
     org_pct_mean   = mean(org_pct, na.rm = TRUE),
     inorg_pct_mean = mean(inorg_pct, na.rm = TRUE),
-    salt_pct_mean  = mean(salt_pct, na.rm = TRUE),
     org_g_mean     = mean(org_g, na.rm = TRUE),
     inorg_g_mean   = mean(inorg_g, na.rm = TRUE),
-    salt_g_mean    = mean(salt_g, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -1412,3 +1410,480 @@ pairwise.wilcox.test(
   bite_site_mean$Region,
   p.adjust.method = "BH"
 )
+
+# Herbivorous fishes without farmers (territorial croppers)----
+# This section is added as a sensitivity analysis to examine
+# whether excluding territorial damselfishes changes the regional pattern.
+
+# 1. Quadrat-level grazing pressure without farmers ----
+
+bite_by_quadrat_wo_farmers <- bite %>%
+  filter(
+    `trophic group` == "Herbivore",
+    `herbivore functional group` != "farmers (territorial croppers)"
+  ) %>%
+  group_by(Region, site, Camera) %>%
+  summarise(
+    total_bites = sum(bites, na.rm = TRUE),
+    n_events = sum(bites > 0, na.rm = TRUE),
+    mean_bites_per_event = ifelse(n_events > 0, total_bites / n_events, NA_real_),
+    .groups = "drop"
+  )
+
+# Keep all cameras, including quadrats with zero non-farmer herbivore feeding
+bite_by_quadrat_wo_farmers <- all_camera %>%
+  left_join(
+    bite_by_quadrat_wo_farmers,
+    by = c("Region", "site", "Camera")
+  ) %>%
+  mutate(
+    total_bites = replace_na(total_bites, 0),
+    n_events = replace_na(n_events, 0),
+    total_bite_rate = total_bites * 60 / duration,
+    event_rate = n_events * 60 / duration,
+    Region = as.factor(Region)
+  )
+
+
+# 2. Occurrence of non-farmer herbivore feeding ----
+
+camera_zero_summary_wo_farmers <- bite_by_quadrat_wo_farmers %>%
+  mutate(has_herbivore_wo_farmers = n_events > 0) %>%
+  group_by(Region) %>%
+  summarise(
+    n_camera = n(),
+    n_with_herbivore_wo_farmers = sum(has_herbivore_wo_farmers),
+    prop_with_herbivore_wo_farmers = mean(has_herbivore_wo_farmers),
+    prop_zero_wo_farmers = mean(!has_herbivore_wo_farmers),
+    .groups = "drop"
+  )
+
+camera_zero_summary_wo_farmers
+
+ggplot(
+  camera_zero_summary_wo_farmers,
+  aes(x = Region, y = prop_with_herbivore_wo_farmers, fill = Region)
+) +
+  geom_col() +
+  scale_fill_manual(values = region_color) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = "Proportion of cameras with non-farmer herbivore feeding",
+    title = "Occurrence of herbivore feeding after excluding farmers"
+  )
+
+
+# 3. Quadrat-level comparison: all herbivores vs. without farmers ----
+
+bite_quadrat_compare <- bind_rows(
+  bite_by_quadrat %>%
+    mutate(dataset = "All herbivorous fishes"),
+  
+  bite_by_quadrat_wo_farmers %>%
+    mutate(dataset = "Herbivorous fishes without farmers")
+) %>%
+  select(Region, site, Camera, dataset, total_bite_rate, event_rate, mean_bites_per_event)
+
+bite_quadrat_compare_long <- bite_quadrat_compare %>%
+  select(Region, dataset, total_bite_rate, event_rate) %>%
+  pivot_longer(
+    cols = c(total_bite_rate, event_rate),
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(
+    metric = factor(
+      metric,
+      levels = c("total_bite_rate", "event_rate"),
+      labels = c(
+        "Total bite rate\n(bites/hr)",
+        "Feeding event rate\n(events/hr)"
+      )
+    ),
+    dataset = factor(
+      dataset,
+      levels = c(
+        "All herbivorous fishes",
+        "Herbivorous fishes without farmers"
+      )
+    )
+  )
+
+quadrat_compare_plot <- 
+  ggplot(bite_quadrat_compare_long, aes(x = Region, y = value, fill = Region)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.45) +
+  geom_jitter(
+    width = 0.15,
+    size = 2,
+    alpha = 0.6,
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    color = "black",
+    size = 2
+  ) +
+  scale_fill_manual(values = region_color) +
+  facet_grid(metric ~ dataset, scales = "free_y") +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = NULL
+  )
+
+quadrat_compare_plot
+
+
+# 4. Site-level mean without farmers ----
+
+bite_site_mean_wo_farmers <- bite_by_quadrat_wo_farmers %>%
+  group_by(Region, site) %>%
+  summarise(
+    total_bite_rate_site_mean = mean(total_bite_rate, na.rm = TRUE),
+    event_rate_site_mean = mean(event_rate, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+# 5. Site-level BPE without farmers ----
+# Exclude quadrats with no non-farmer herbivore feeding events.
+
+bpe_site_wo_farmers <- bite_by_quadrat_wo_farmers %>%
+  filter(n_events > 0) %>%
+  group_by(Region, site) %>%
+  summarise(
+    bpe_site_mean = mean(mean_bites_per_event, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  left_join(
+    IO_site_mean,
+    by = c("Region", "site")
+  ) %>%
+  left_join(
+    CNP_site_mean_adj_2,
+    by = c("Region", "site")
+  ) %>%
+  mutate(
+    bites_per_event_org_adj = bpe_site_mean / org_g_mean,
+    bites_per_event_CN_adj = bpe_site_mean / bulk_CN_ratio_adj,
+    bites_per_event_CP_adj = bpe_site_mean / bulk_CP_ratio_adj,
+    bites_per_event_NP_adj = bpe_site_mean / bulk_NP_ratio_adj
+  )
+
+
+# 6. Site-level comparison: all herbivores vs. without farmers ----
+
+bite_site_compare <- bind_rows(
+  bite_site_mean %>%
+    mutate(dataset = "All herbivorous fishes"),
+  
+  bite_site_mean_wo_farmers %>%
+    mutate(dataset = "Herbivorous fishes without farmers")
+)
+
+bite_site_compare_long <- bite_site_compare %>%
+  pivot_longer(
+    cols = c(total_bite_rate_site_mean, event_rate_site_mean),
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(
+    metric = factor(
+      metric,
+      levels = c("total_bite_rate_site_mean", "event_rate_site_mean"),
+      labels = c(
+        "Total bite rate\n(bites m⁻² h⁻¹)",
+        "Feeding event rate\n(events m⁻² h⁻¹)"
+      )
+    ),
+    dataset = factor(
+      dataset,
+      levels = c(
+        "All herbivorous fishes",
+        "Herbivorous fishes without farmers"
+      )
+    )
+  )
+
+site_compare_plot <- 
+  ggplot(bite_site_compare_long, aes(x = Region, y = value, fill = Region)) +
+  geom_boxplot(
+    outlier.shape = NA,
+    alpha = 0.45,
+    color = "black"
+  ) +
+  geom_jitter(
+    width = 0.15,
+    size = 2.5,
+    alpha = 0.8,
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    color = "black",
+    size = 2
+  ) +
+  scale_fill_manual(values = region_color) +
+  facet_grid(metric ~ dataset, scales = "free_y") +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(
+    x = "Region",
+    y = NULL
+  )
+
+site_compare_plot
+
+
+# 7. Site-level BPE comparison: all herbivores vs. without farmers ----
+
+bpe_compare <- bind_rows(
+  bpe_site %>%
+    select(Region, site, bpe_site_mean) %>%
+    mutate(dataset = "All herbivorous fishes"),
+  
+  bpe_site_wo_farmers %>%
+    select(Region, site, bpe_site_mean) %>%
+    mutate(dataset = "Herbivorous fishes without farmers")
+) %>%
+  mutate(
+    dataset = factor(
+      dataset,
+      levels = c(
+        "All herbivorous fishes",
+        "Herbivorous fishes without farmers"
+      )
+    )
+  )
+
+bpe_compare_summary <- bpe_compare %>%
+  group_by(dataset, Region) %>%
+  filter(n() >= 2) %>%
+  ungroup()
+
+bpe_compare_plot <- 
+  ggplot(bpe_compare, aes(x = Region, y = bpe_site_mean)) +
+  geom_jitter(
+    aes(fill = Region),
+    width = 0.15,
+    size = 2.5,
+    alpha = 0.8,
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
+  stat_summary(
+    data = bpe_compare_summary,
+    fun = mean,
+    geom = "point",
+    color = "black",
+    size = 2
+  ) +
+  stat_summary(
+    data = bpe_compare_summary,
+    aes(color = Region),
+    fun.data = mean_cl_normal,
+    geom = "errorbar",
+    width = 0.12
+  ) +
+  scale_fill_manual(values = region_color) +
+  scale_color_manual(values = region_color) +
+  facet_wrap(~ dataset, nrow = 1) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  labs(
+    x = "Region",
+    y = expression("Bites per event (bites "*event^-1*")")
+  )
+
+bpe_compare_plot
+
+
+# 8. Statistical tests without farmers ----
+
+# Quadrat-level total bite rate
+kruskal_test(
+  total_bite_rate ~ Region,
+  data = bite_by_quadrat_wo_farmers,
+  distribution = coin::approximate(nresample = 9999)
+)
+
+pairwise.wilcox.test(
+  bite_by_quadrat_wo_farmers$total_bite_rate,
+  bite_by_quadrat_wo_farmers$Region,
+  p.adjust.method = "BH"
+)
+
+# Quadrat-level event rate
+kruskal_test(
+  event_rate ~ Region,
+  data = bite_by_quadrat_wo_farmers,
+  distribution = coin::approximate(nresample = 9999)
+)
+
+pairwise.wilcox.test(
+  bite_by_quadrat_wo_farmers$event_rate,
+  bite_by_quadrat_wo_farmers$Region,
+  p.adjust.method = "BH"
+)
+
+# Bites per event, excluding zero-event quadrats
+herb_bite_positive_wo_farmers <- bite_by_quadrat_wo_farmers %>%
+  filter(n_events > 0) %>%
+  mutate(
+    Region = as.factor(Region),
+    mean_bites_per_event = as.numeric(mean_bites_per_event)
+  )
+
+kruskal_test(
+  mean_bites_per_event ~ Region,
+  data = herb_bite_positive_wo_farmers,
+  distribution = coin::approximate(nresample = 9999)
+)
+
+pairwise.wilcox.test(
+  herb_bite_positive_wo_farmers$mean_bites_per_event,
+  herb_bite_positive_wo_farmers$Region,
+  p.adjust.method = "BH"
+)
+
+
+# Site-level total bite rate
+kruskal_test(
+  total_bite_rate_site_mean ~ Region,
+  data = bite_site_mean_wo_farmers,
+  distribution = coin::approximate(nresample = 9999)
+)
+
+pairwise.wilcox.test(
+  bite_site_mean_wo_farmers$total_bite_rate_site_mean,
+  bite_site_mean_wo_farmers$Region,
+  p.adjust.method = "BH"
+)
+
+# Site-level event rate
+kruskal_test(
+  event_rate_site_mean ~ Region,
+  data = bite_site_mean_wo_farmers,
+  distribution = coin::approximate(nresample = 9999)
+)
+
+pairwise.wilcox.test(
+  bite_site_mean_wo_farmers$event_rate_site_mean,
+  bite_site_mean_wo_farmers$Region,
+  p.adjust.method = "BH"
+)
+
+# Site-level BPE
+bpe_site_wo_farmers <- bpe_site_wo_farmers %>%
+  mutate(
+    Region = as.factor(Region),
+    bpe_site_mean = as.numeric(bpe_site_mean)
+  )
+
+kruskal_test(
+  bpe_site_mean ~ Region,
+  data = bpe_site_wo_farmers,
+  distribution = coin::approximate(nresample = 9999)
+)
+
+pairwise.wilcox.test(
+  bpe_site_wo_farmers$bpe_site_mean,
+  bpe_site_wo_farmers$Region,
+  p.adjust.method = "BH"
+)
+
+
+# 9. Simple summary table: change after excluding farmers ----
+
+site_mean_change <- bite_site_mean %>%
+  rename(
+    total_bite_rate_all = total_bite_rate_site_mean,
+    event_rate_all = event_rate_site_mean
+  ) %>%
+  left_join(
+    bite_site_mean_wo_farmers %>%
+      rename(
+        total_bite_rate_wo_farmers = total_bite_rate_site_mean,
+        event_rate_wo_farmers = event_rate_site_mean
+      ),
+    by = c("Region", "site")
+  ) %>%
+  mutate(
+    total_bite_rate_removed = total_bite_rate_all - total_bite_rate_wo_farmers,
+    event_rate_removed = event_rate_all - event_rate_wo_farmers,
+    total_bite_rate_removed_pct = total_bite_rate_removed / total_bite_rate_all * 100,
+    event_rate_removed_pct = event_rate_removed / event_rate_all * 100
+  )
+
+site_mean_change
+
+region_mean_change <- site_mean_change %>%
+  group_by(Region) %>%
+  summarise(
+    total_bite_rate_all_mean = mean(total_bite_rate_all, na.rm = TRUE),
+    total_bite_rate_wo_farmers_mean = mean(total_bite_rate_wo_farmers, na.rm = TRUE),
+    total_bite_rate_removed_pct_mean = mean(total_bite_rate_removed_pct, na.rm = TRUE),
+    
+    event_rate_all_mean = mean(event_rate_all, na.rm = TRUE),
+    event_rate_wo_farmers_mean = mean(event_rate_wo_farmers, na.rm = TRUE),
+    event_rate_removed_pct_mean = mean(event_rate_removed_pct, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+region_mean_change
+
+#region species taxa amount----
+
+fish_species <- tibble::tribble(
+  ~Region, ~Species,
+  "XLQ", "Siganus guttatus",
+  "XLQ", "Leptoscarus vaigiensis",
+  
+  "GI", "Plectroglyphidodon spp.",
+  "GI", "Acanthurus nigrofuscus",
+  "GI", "Atrosalarias holomelas",
+  "GI", "Cirripectes castaneus",
+  "GI", "Scarus psittacus",
+  "GI", "Scarus quoyi",
+  "GI", "Chlorurus japanensis",
+  "GI", "Plectroglyphidodon fasciolatus",
+  "GI", "Scarus rubroviolaceus",
+  
+  "NE", "Plectroglyphidodon obreptus",
+  "NE", "Scarus dimidiatus",
+  "NE", "Ecsenius lineatus"
+)
+
+fish_richness <- fish_species %>%
+  distinct(Region, Species) %>%
+  count(Region, name = "n_taxa")
+
+fish_richness_plot <- 
+  ggplot(fish_richness, aes(x = Region, y = n_taxa, fill = Region)) +
+  geom_col(
+    color = "black",
+    linewidth = 0.3,
+    width = 0.65
+  ) +
+  scale_fill_manual(values = region_color) +
+  theme_bw() +
+  theme(
+    legend.position = "none"
+  ) +
+  labs(
+    x = "Region",
+    y = "Number of recorded taxa"
+  )
+
+fish_richness_plot
