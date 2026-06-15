@@ -825,7 +825,7 @@ IO_site_mean <- IO %>%
     .groups = "drop"
   )
 
-# Site-level bites per event
+# Site-level bites per event----
 # BPE is retained only at site level in this cleaned version
 
 bpe_site <- bite_by_quadrat %>%
@@ -909,13 +909,6 @@ kruskal_test(
   data = bpe_site,
   distribution = coin::approximate(nresample = 9999)
 )
-
-pairwise.wilcox.test(
-  bpe_site$bpe_site_mean,
-  bpe_site$Region,
-  p.adjust.method = "BH"
-)
-
 
 bpe_site_adj <- bpe_site %>%
   select(
@@ -1044,7 +1037,7 @@ log_bpe_site_CNP_ratio <- bpe_site %>%
   mutate(
     Ratio = recode(
       Ratio,
-      "org_pct_mean" = "organic matter",
+      "org_pct_mean" = "organic matter percentage (%)",
       "bulk_CN_ratio_adj" = "C:N ratio",
       "bulk_CP_ratio_adj" = "C:P ratio",
       "bulk_NP_ratio_adj" = "N:P ratio"
@@ -1052,7 +1045,7 @@ log_bpe_site_CNP_ratio <- bpe_site %>%
     Ratio = factor(
       Ratio,
       levels = c(
-        "organic matter",
+        "organic matter percentage (%)",
         "C:N ratio",
         "C:P ratio",
         "N:P ratio"
