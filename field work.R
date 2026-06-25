@@ -1880,3 +1880,98 @@ fish_richness_plot <-
   )
 
 fish_richness_plot
+
+## algae only plot----
+
+algal_con_data <- CNP_site_mean_adj_2 %>%
+  select(
+    Region,
+    algal_C_mgg_mean,
+    algal_N_mgg_mean,
+    algal_P_mgg_mean
+  ) %>%
+  pivot_longer(
+    cols = -Region,
+    names_to = "variable",
+    values_to = "value"
+  )
+
+algal_con <- ggplot(algal_con_data, aes(x = Region, y = value)) +
+  geom_boxplot(
+    aes(fill = Region),
+    outlier.shape = NA,
+    alpha = 0.45,
+    color = "black"
+  ) +
+  geom_jitter(
+    aes(fill = Region),
+    size = 2.2,
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
+  facet_wrap(
+    ~ variable, 
+    scales = "free_y", 
+    ncol = 3,
+    labeller = as_labeller(c(
+      "algal_C_mgg_mean" = "Carbon (mg g⁻¹)",
+      "algal_N_mgg_mean" = "Nitrogen (mg g⁻¹)",
+      "algal_P_mgg_mean" = "Phosphorus (mg g⁻¹)"
+    ))
+  ) +
+  theme_bw() +
+  labs(
+    tag = "(a)",
+    x = "Region",
+    y = "Concentration (mg/g)"
+  )
+
+algal_stoi_data <- CNP_site_mean_adj_2 %>%
+  select(
+    Region,
+    algal_CN_ratio,
+    algal_CP_ratio,
+    algal_NP_ratio
+  ) %>%
+  pivot_longer(
+    cols = -Region,
+    names_to = "variable",
+    values_to = "value"
+  )
+
+algal_stoi <- ggplot(algal_stoi_data, aes(x = Region, y = value)) +
+  geom_boxplot(
+    aes(fill = Region),
+    outlier.shape = NA,
+    alpha = 0.45,
+    color = "black"
+  ) +
+  geom_jitter(
+    aes(fill = Region),
+    size = 2.2,
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
+  scale_fill_manual(values = region_color) +
+  guides(fill = "none") +
+  facet_wrap(
+    ~ variable, 
+    scales = "free_y", 
+    ncol = 3,
+    labeller = as_labeller(c(
+      "algal_CN_ratio" = "C:N ratio",
+      "algal_CP_ratio" = "C:P ratio",
+      "algal_NP_ratio" = "N:P ratio"
+    ))
+  ) +
+  theme_bw() +
+  labs(
+    tag = "(b)",
+    x = "Region",
+    y = "Molar ratio"
+  )
+algal_con/algal_stoi
